@@ -28,6 +28,7 @@
     (define-key map "q" 'ovpn-mode-stop-vpn)
     (define-key map "i" 'ovpn-mode-info-vpn)
     (define-key map "b" 'ovpn-mode-buffer-vpn)
+    (define-key map "e" 'ovpn-mode-edit-vpn)
     map)
   "The keyboard map for ovpn-mode.")
 
@@ -231,6 +232,13 @@
          (ovpn-process (gethash conf ovpn-mode-process-map)))
     (when ovpn-process
       (switch-to-buffer (struct-ovpn-process-buffer ovpn-process)))))
+
+(defun ovpn-mode-edit-vpn ()
+  "opens the selected ovpn conf for editing"
+  (interactive)
+  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
+         (when (string-match ".*\\.ovpn" conf)
+           (find-file conf))))
 
 (defun ovpn ()
   "main entry point for ovpn-mode interface"

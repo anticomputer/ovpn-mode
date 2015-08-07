@@ -14,6 +14,7 @@ Additionally you have available:
 
 - `i`: remote link info for the selected ovpn
 - `b`: switch to the output buffer for the selected ovpn
+- `e`: edit the selected ovpn
 
 `M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly.
 
