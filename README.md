@@ -15,6 +15,6 @@ Additionally you have available:
 - `i`: remote link info for the selected ovpn
 - `b`: switch to the output buffer for the selected ovpn
 
-`M-x ovpn-mode-dir-set` lets you point ovpn at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly.
+`M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly.
 
 This is something I wrote to fit my exact use case (i.e. I like to be able to pop into and out of multiple openvpn configurations). It should work on any UNIX-like system that has sudo and openvpn available but I've only tested it on Linux.
