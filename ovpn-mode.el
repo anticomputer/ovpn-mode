@@ -198,7 +198,7 @@
 ;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
   "sends SIG to OVPN-PROCESS->process"
-  (if ovpn-process
+  (when ovpn-process
       (progn
         (let* ((process (struct-ovpn-process-process ovpn-process))
                (buffer (struct-ovpn-process-buffer ovpn-process))
@@ -213,8 +213,7 @@
                                "sudo" "kill" (format "-%d" sig) (format "%d" (process-id process))))
                 (set-process-filter process 'ovpn-process-filter)
                 (set-process-sentinel process 'ovpn-process-sentinel))
-            (message "Target openvpn process no longer alive"))))
-    (message (format "No active process found for this conf"))))
+            (message "Target openvpn process no longer alive"))))))
 
 (defun ovpn-mode-stop-vpn ()
   "stops openvpn conf through SIGTERM"
@@ -239,7 +238,8 @@
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map)))
     ;; relay SIGHUP through sudo
-    (ovpn-mode-signal-process 1 ovpn-process)))
+    (when ovpn-process
+      (ovpn-mode-signal-process 1 ovpn-process))))
 
 (defun ovpn-mode-info-vpn ()
   "dumps info stats on selected ovpn conf"
