@@ -1,13 +1,37 @@
-;; ovpn-mode: an openvpn management mode for emacs
+;;; ovpn-mode.el --- an openvpn management mode for emacs  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2015  Bas Alberts
+
+;; Author: Bas Alberts <bas@collarchoke.org>
+;; Keywords: comm
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; Usage: M-x ovpn to enter main mode, M-x ovpn-mode-dir-set to switch to
+;; a new conf dir base.
 ;;
-;; usage: M-x ovpn, M-x ovpn-mode-dir-set to switch to a new conf dir base
-;;
-;; note that ovpn-mode will maintain state, so you can switch between
+;; Note that ovpn-mode will maintain state, so you can switch between
 ;; conf dir bases and it will display the correct states for any confs
 ;; in use as you swap back and forth between conf listings
 ;;
-;; the only _hard_ requirement is that your openvpn configurations are
+;; The only _hard_ requirement is that your openvpn configurations are
 ;; named according to the bla.ovpn convention.
+;;
+
+;;; Code:
 
 ;; this is where all your openvpn confs live, if not using absolute certificate paths
 ;; in your .ovpn's then we assume the certificates are in the same directory as the conf
@@ -271,3 +295,4 @@
                                        ovpn-mode-buffer nil))))
 
 (provide 'ovpn-mode)
+;;; ovpn-mode.el ends here
