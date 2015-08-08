@@ -49,6 +49,7 @@
   (let ((map (make-sparse-keymap)))
     ;; inherit from fundamental and do mode-global keybindings here
     (define-key map "s" 'ovpn-mode-start-vpn)
+    (define-key map "r" 'ovpn-mode-restart-vpn)
     (define-key map "q" 'ovpn-mode-stop-vpn)
     (define-key map "i" 'ovpn-mode-info-vpn)
     (define-key map "b" 'ovpn-mode-buffer-vpn)
@@ -125,15 +126,16 @@
                 (let* ((ovpn-process (gethash proc ovpn-mode-process-map)))
                   (when ovpn-process
                     (setf (struct-ovpn-process-link-remote ovpn-process)
-                          (match-string 1 string))))))
+                          (match-string 1 string))
+                    (message (format "link remote: %s"
+                                     (struct-ovpn-process-link-remote ovpn-process)))))))
             (princ (format "%s" string) (process-buffer proc))))))))
 
 (defun ovpn-process-sentinel (proc string)
-  ;; XXX: needs more explicit error case checking, might just be a SIGHUP
-  ;; XXX: seems to handling the restart/SIGHUP case fine/intuitively for now
   (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
          (conf nil))
-    (cond (ovpn-process
+    (cond ((and ovpn-process
+                (memq (process-status proc) '(exit signal)))
            (setq conf  (struct-ovpn-process-conf ovpn-process))
            (ovpn-mode-unhighlight-conf conf)
            (ovpn-mode-highlight-conf conf 'hi-red-b)
@@ -211,8 +213,8 @@
                                "sudo" "kill" (format "-%d" sig) (format "%d" (process-id process))))
                 (set-process-filter process 'ovpn-process-filter)
                 (set-process-sentinel process 'ovpn-process-sentinel))
-            (message "Target openvpn process no longer alive!"))))
-    (message (format "No active process found for: %s" (file-name-nondirectory conf)))))
+            (message "Target openvpn process no longer alive"))))
+    (message (format "No active process found for this conf"))))
 
 (defun ovpn-mode-stop-vpn ()
   "stops openvpn conf through SIGTERM"
