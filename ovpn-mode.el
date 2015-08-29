@@ -77,7 +77,7 @@
 ;; this lets you juggle multiple dirs of confs and maintain state between them
 (defun ovpn-mode-dir-set (dir)
   "set new base DIR for ovpn confs and redisplay"
-  (interactive "sPath to .ovpn configurations: ")
+  (interactive "fPath to .ovpn configurations: ")
   (setq ovpn-mode-base-directory dir)
   (setq ovpn-mode-configurations nil)
   (ovpn))
