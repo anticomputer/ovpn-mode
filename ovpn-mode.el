@@ -109,8 +109,8 @@
 (defun ovpn-process-filter (proc string)
   (when (process-live-p proc)
     (let ((prompts
-           ;; deal with openvpn auth prompts as well
-           (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\).*: *\\)"
+           ;; deal with openvpn auth and 2fa challenge response prompts as well
+           (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\).*: *\\)"
                    tramp-password-prompt-regexp)))
       (save-match-data
         (if (string-match prompts string)
