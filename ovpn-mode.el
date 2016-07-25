@@ -54,6 +54,7 @@
     (define-key map "i" 'ovpn-mode-info-vpn)
     (define-key map "b" 'ovpn-mode-buffer-vpn)
     (define-key map "e" 'ovpn-mode-edit-vpn)
+    (define-key map "d" 'ovpn-mode-dir-set)
     map)
   "The keyboard map for ovpn-mode.")
 
@@ -110,7 +111,7 @@
   (when (process-live-p proc)
     (let ((prompts
            ;; deal with openvpn auth and 2fa challenge response prompts as well
-           (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\).*: *\\)"
+           (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\|Enter Google Authenticator Code\\).*: *\\)\\|\\(^.*Enter Google Authenticator Code*\\)"
                    tramp-password-prompt-regexp)))
       (save-match-data
         (if (string-match prompts string)
