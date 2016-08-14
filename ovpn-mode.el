@@ -33,17 +33,39 @@
 
 ;;; Code:
 
-;; this is where all your openvpn confs live, if not using absolute certificate paths
-;; in your .ovpn's then we assume the certificates are in the same directory as the conf
+;;; this is where all your openvpn confs live, if not using absolute certificate paths
+;;; in your .ovpn's then we assume the certificates are in the same directory as the conf
 (defvar ovpn-mode-base-directory "~/VPN/PIA")
 
 (defvar ovpn-mode-hook nil
   "Hook being run after `ovpn-mode' has completely set up the buffer.")
 
-;; major mode for future buffer and keymap enhancements
+;;; major mode for future buffer and keymap enhancements
 (defvar ovpn-mode-keywords '("ovpn"))
 (defvar ovpn-mode-keywords-regexp (regexp-opt ovpn-mode-keywords 'words))
 (defvar ovpn-mode-font-lock-keywords `((,ovpn-mode-keywords-regexp . font-lock-keyword-face)))
+
+;;; this is used for platform specific quirks
+(defvar ovpn-mode-current-platform 'linux)
+
+;;; struct so that we can expand this easily
+(cl-defstruct struct-ovpn-mode-platform-specific
+  ipv6-toggle
+  ipv6-status)
+
+(defvar ovpn-mode-platform-specific nil)
+
+(cond ((equal ovpn-mode-current-platform 'linux)
+       (setq ovpn-mode-platform-specific
+             (make-struct-ovpn-mode-platform-specific
+              :ipv6-toggle 'ovpn-mode-ipv6-linux-toggle
+              :ipv6-status 'ovpn-mode-ipv6-linux-status)))
+      (t
+       ;; default to 'ignore non-specifics platform
+       (setq ovpn-mode-platform-specific
+             (make-struct-ovpn-mode-platform-specific
+              :ipv6-toggle 'ignore
+              :ipv6-status 'ignore))))
 
 (defvar ovpn-mode-map
   (let ((map (make-sparse-keymap)))
@@ -55,6 +77,9 @@
     (define-key map "b" 'ovpn-mode-buffer-vpn)
     (define-key map "e" 'ovpn-mode-edit-vpn)
     (define-key map "d" 'ovpn-mode-dir-set)
+    (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
+                         ovpn-mode-platform-specific))
+    (define-key map "h" 'describe-mode)
     map)
   "The keyboard map for ovpn-mode.")
 
@@ -75,7 +100,51 @@
 (defvar ovpn-mode-buffer-name "*ovpn-mode*")
 (defvar ovpn-mode-buffer nil)
 
-;; this lets you juggle multiple dirs of confs and maintain state between them
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
+
+(defun ovpn-mode-ipv6-linux-status ()
+  "message status of IPv6 support"
+  (let ((status_all (shell-command-to-string "sysctl net.ipv6.conf.all.disable_ipv6"))
+        (status_def (shell-command-to-string "sysctl net.ipv6.conf.default.disable_ipv6")))
+    (if (and (string-match "^.*= 1" status_all)
+             (string-match "^.*= 1" status_def))
+        ;; disabled
+        nil
+      ;; enabled
+      t)))
+
+(defun ovpn-mode-ipv6-linux-toggle ()
+  "toggle ipv6 state (enabled/disabled)"
+  (interactive)
+  (let* ((on-or-off '((t . 1) (nil . 0))) ; t means current val is 0 ...
+         (sysctl-arg (cdr (assoc (ovpn-mode-ipv6-linux-status) on-or-off))))
+    (when (y-or-n-p (format "ipv6 support is %s, toggle to %s?"
+                            (nth sysctl-arg '("off" "on")) ; :P
+                            (nth sysctl-arg '("on" "off"))))
+      (ovpn-mode-ipv6-linux-sysctl-disable sysctl-arg))))
+
+;;; deal with sudo password prompt as needed
+(defun ovpn-mode-ipv6-linux-sysctl-monitor-filter (proc string)
+  (when (process-live-p proc)
+    (if (string-match tramp-password-prompt-regexp string)
+        (process-send-string proc (concat (read-passwd string) "\n"))
+      (mapcar 'message (split-string string "\n"))))
+
+(defun ovpn-mode-ipv6-linux-sysctl-disable (on-or-off)
+  "disable ipv6 support via sysctl to value of ON-OR-OFF"
+  (let* ((process (start-process
+                   "ipv6-linux-sysctl-disable"
+                   (get-buffer-create "*Messages*")
+                   "sudo" "sysctl"
+                   "-w" (format "net.ipv6.conf.all.disable_ipv6=%d" on-or-off)
+                   "-w" (format "net.ipv6.conf.default.disable_ipv6=%d" on-or-off))))
+    (if (process-live-p process)
+        (set-process-filter process 'ovpn-mode-ipv6-linux-sysctl-monitor-filter)
+      (message "Could not disable ipv6 support"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of Linux specifics
+
+;;; this lets you juggle multiple dirs of confs and maintain state between them
 (defun ovpn-mode-dir-set (dir)
   "set new base DIR for ovpn confs and redisplay"
   (interactive "fPath to .ovpn configurations: ")
@@ -104,7 +173,7 @@
 (defvar ovpn-mode-process-map (make-hash-table :test 'equal))
 (cl-defstruct struct-ovpn-process buffer buffer-name process conf pid link-remote)
 
-;; we use tramp's password prompt matcher
+;;; we use tramp's password prompt matcher
 (require 'tramp)
 
 (defun ovpn-process-filter (proc string)
@@ -128,8 +197,9 @@
                   (when ovpn-process
                     (setf (struct-ovpn-process-link-remote ovpn-process)
                           (match-string 1 string))
-                    (message (format "link remote: %s"
-                                     (struct-ovpn-process-link-remote ovpn-process)))))))
+                    ;;(message (format "link remote: %s"
+                    ;;                 (struct-ovpn-process-link-remote ovpn-process)))
+                    ))))
             (princ (format "%s" string) (process-buffer proc))))))))
 
 (defun ovpn-process-sentinel (proc string)
@@ -165,6 +235,11 @@
 (defun ovpn-mode-start-vpn ()
   "starts openvpn conf, assumes any associated certificates live in the same dir as the .ovpn"
   (interactive)
+  ;; disable ipv6 (if so desired, and supported on the current platform)
+  (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status
+                  ovpn-mode-platform-specific))
+    (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle
+               ovpn-mode-platform-specific)))
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
     (when (string-match ".*\\.ovpn" conf)
         (if (not (gethash conf ovpn-mode-process-map))
@@ -196,7 +271,7 @@
                                    (file-name-nondirectory conf))))))
           (message (format "Already started %s" (file-name-nondirectory conf)))))))
 
-;; as root through kill since we don't know about priv-drops and can't use signal-process
+;;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
   "sends SIG to OVPN-PROCESS->process"
   (when ovpn-process
