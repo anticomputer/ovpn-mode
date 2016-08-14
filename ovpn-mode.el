@@ -128,7 +128,7 @@
   (when (process-live-p proc)
     (if (string-match tramp-password-prompt-regexp string)
         (process-send-string proc (concat (read-passwd string) "\n"))
-      (mapcar 'message (split-string string "\n"))))
+      (mapcar 'message (split-string string "\n")))))
 
 (defun ovpn-mode-ipv6-linux-sysctl-disable (on-or-off)
   "disable ipv6 support via sysctl to value of ON-OR-OFF"
