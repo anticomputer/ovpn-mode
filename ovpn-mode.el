@@ -35,7 +35,7 @@
 
 ;;; this is where all your openvpn confs live, if not using absolute certificate paths
 ;;; in your .ovpn's then we assume the certificates are in the same directory as the conf
-(defvar ovpn-mode-base-directory "~/VPN/PIA")
+(defvar ovpn-mode-base-directory "~/vpn/default")
 
 (defvar ovpn-mode-hook nil
   "Hook being run after `ovpn-mode' has completely set up the buffer.")
@@ -105,9 +105,11 @@
 (defun ovpn-mode-ipv6-linux-status ()
   "message status of IPv6 support"
   (let ((status_all (shell-command-to-string "sysctl net.ipv6.conf.all.disable_ipv6"))
-        (status_def (shell-command-to-string "sysctl net.ipv6.conf.default.disable_ipv6")))
+        (status_def (shell-command-to-string "sysctl net.ipv6.conf.default.disable_ipv6"))
+        (status_loc (shell-command-to-string "sysctl net.ipv6.conf.lo.disable_ipv6")))
     (if (and (string-match "^.*= 1" status_all)
-             (string-match "^.*= 1" status_def))
+             (string-match "^.*= 1" status_def)
+             (string-match "^.*= 1" status_loc))
         ;; disabled
         nil
       ;; enabled
@@ -137,7 +139,9 @@
                    (get-buffer-create "*Messages*")
                    "sudo" "sysctl"
                    "-w" (format "net.ipv6.conf.all.disable_ipv6=%d" on-or-off)
-                   "-w" (format "net.ipv6.conf.default.disable_ipv6=%d" on-or-off))))
+                   "-w" (format "net.ipv6.conf.default.disable_ipv6=%d" on-or-off)
+                   "-w" (format "net.ipv6.conf.lo.disable_ipv6=%d" on-or-off)
+                   )))
     (if (process-live-p process)
         (set-process-filter process 'ovpn-mode-ipv6-linux-sysctl-monitor-filter)
       (message "Could not disable ipv6 support"))))
