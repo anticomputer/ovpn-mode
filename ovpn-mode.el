@@ -277,22 +277,30 @@
 
 ;;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
-  "sends SIG to OVPN-PROCESS->process"
+  "sends SIG to OVPN-PROCESS->process (sudo) child directly"
   (when ovpn-process
       (progn
         (let* ((process (struct-ovpn-process-process ovpn-process))
                (buffer (struct-ovpn-process-buffer ovpn-process))
                (conf (struct-ovpn-process-conf ovpn-process))
                (buffer-name (struct-ovpn-process-buffer-name ovpn-process)))
+          ;; sudo doesn't relay all signals (e.g. SIGKILL), so to ensure
+          ;; that ANY signal we send ends up at the right process, we send
+          ;; it directly to the sudo child (which is our actual openvpn proc)
           (if (process-live-p process)
-              (progn
-                (setq process (start-process
-                               (format "ovpn-mode-stop: %s (pid: %d)"
-                                       buffer-name (process-id process))
-                               buffer
-                               "sudo" "kill" (format "-%d" sig) (format "%d" (process-id process))))
-                (set-process-filter process 'ovpn-process-filter)
-                (set-process-sentinel process 'ovpn-process-sentinel))
+              (let ((cpid (string-to-number (shell-command-to-string
+                                             (format "ps -o pid= --ppid %d"
+                                                     (process-id process))))))
+                (progn
+                  (setq process (start-process
+                                 (format "ovpn-mode-stop: %s (pid: %d)"
+                                         buffer-name (process-id process))
+                                 buffer
+                                 "sudo" "kill"
+                                 (format "-%d" sig)
+                                 (format "%d" cpid)))
+                  (set-process-filter process 'ovpn-process-filter)
+                  (set-process-sentinel process 'ovpn-process-sentinel)))
             (message "Target openvpn process no longer alive"))))))
 
 (defun ovpn-mode-stop-vpn ()
@@ -301,7 +309,6 @@
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map)))
     (when ovpn-process
-      ;; sudo does not relay SIGKILL so use SIGTERM
       (ovpn-mode-signal-process 15 ovpn-process)
       (ovpn-mode-unhighlight-conf conf)
       ;; pull the hash table entry for this instance
