@@ -289,7 +289,7 @@
           ;; it directly to the sudo child (which is our actual openvpn proc)
           (if (process-live-p process)
               (let ((cpid (string-to-number (shell-command-to-string
-                                             (format "ps -o pid= --ppid %d"
+                                             (format "pgrep -P %d"
                                                      (process-id process))))))
                 (progn
                   (setq process (start-process
