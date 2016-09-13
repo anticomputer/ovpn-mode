@@ -113,11 +113,10 @@
 (defvar ovpn-mode-buffer-name "*ovpn-mode*")
 (defvar ovpn-mode-buffer nil)
 
-
 (defun ovpn-mode-send-sudo-password (proc prompt)
   (let ((password (or (when ovpn-mode-use-authinfo
                         (ovpn-mode-pull-authinfo))
-                      (read-passwd string))))
+                      (read-passwd prompt))))
     (process-send-string proc (concat password "\n"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
@@ -211,7 +210,7 @@
             ;; intercept any sudo prompts with our sudo auth wrapper
             (if (string-match "*sudo*" string)
                 (ovpn-mode-send-sudo-password proc string)
-              ;; deal with any ovnp password prompts
+              ;; deal with any ovpn password prompts
               (process-send-string proc (concat (read-passwd
                                                  ;; strip any color control codes
                                                  (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
