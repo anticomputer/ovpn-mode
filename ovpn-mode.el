@@ -33,6 +33,19 @@
 
 ;;; Code:
 
+;;; sudo auth convenience functions
+(defvar ovpn-mode-authinfo (expand-file-name "~/.authinfo.gpg"))
+(defvar ovpn-mode-authinfo-token "ovpn-mode-sudo")
+(defvar ovpn-mode-use-authinfo t) ; set to nil if you prefer to be prompted
+
+;; add "machine ovpn-mode-sudo login root password yoursudopassword" to .authinfo
+;; if you don't want to be prompted for your sudo password all the time
+(defun ovpn-mode-pull-authinfo ()
+  "Pulls an .authinfo password for machine `ovpn-mode-authinfo-token'"
+  (let* ((netrc (netrc-parse ovpn-mode-authinfo))
+         (hostentry (netrc-machine netrc ovpn-mode-authinfo-token)))
+    (when hostentry (netrc-get hostentry "password"))))
+
 ;;; this is where all your openvpn confs live, if not using absolute certificate paths
 ;;; in your .ovpn's then we assume the certificates are in the same directory as the conf
 (defvar ovpn-mode-base-directory "~/vpn/default")
@@ -129,7 +142,10 @@
 (defun ovpn-mode-ipv6-linux-sysctl-monitor-filter (proc string)
   (when (process-live-p proc)
     (if (string-match tramp-password-prompt-regexp string)
-        (process-send-string proc (concat (read-passwd string) "\n"))
+        (let ((password (or (when ovpn-mode-use-authinfo
+                              (ovpn-mode-pull-authinfo))
+                            (read-passwd string))))
+          (process-send-string proc (concat password "\n")))
       (mapcar 'message (split-string string "\n")))))
 
 (defun ovpn-mode-ipv6-linux-sysctl-disable (on-or-off)
