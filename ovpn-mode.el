@@ -113,6 +113,13 @@
 (defvar ovpn-mode-buffer-name "*ovpn-mode*")
 (defvar ovpn-mode-buffer nil)
 
+
+(defun ovpn-mode-send-sudo-password (proc prompt)
+  (let ((password (or (when ovpn-mode-use-authinfo
+                        (ovpn-mode-pull-authinfo))
+                      (read-passwd string))))
+    (process-send-string proc (concat password "\n"))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
 
 (defun ovpn-mode-ipv6-linux-status ()
@@ -142,10 +149,7 @@
 (defun ovpn-mode-ipv6-linux-sysctl-monitor-filter (proc string)
   (when (process-live-p proc)
     (if (string-match tramp-password-prompt-regexp string)
-        (let ((password (or (when ovpn-mode-use-authinfo
-                              (ovpn-mode-pull-authinfo))
-                            (read-passwd string))))
-          (process-send-string proc (concat password "\n")))
+        (ovpn-mode-send-sudo-password proc string)
       (mapcar 'message (split-string string "\n")))))
 
 (defun ovpn-mode-ipv6-linux-sysctl-disable (on-or-off)
@@ -204,11 +208,14 @@
                    tramp-password-prompt-regexp)))
       (save-match-data
         (if (string-match prompts string)
-            (process-send-string proc (concat (read-passwd
-                                               ;; strip any color control codes
-                                               (replace-regexp-in-string
-                                                "\e\\[[0-9;]*m" "" string)
-                                               ) "\n"))
+            ;; intercept any sudo prompts with our sudo auth wrapper
+            (if (string-match "*sudo*" string)
+                (ovpn-mode-send-sudo-password proc string)
+              ;; deal with any ovnp password prompts
+              (process-send-string proc (concat (read-passwd
+                                                 ;; strip any color control codes
+                                                 (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
+                                                "\n")))
           (progn
             ;; Thu Aug  6 16:11:03 2015 UDPv4 link remote: [AF_INET]111.111.111.111:1194
             (save-match-data
