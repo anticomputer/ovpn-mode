@@ -179,18 +179,34 @@
   "pull .ovpn configs from directory DIR"
   (setq ovpn-mode-configurations (directory-files dir t ".*\\.ovpn")))
 
-(defun ovpn-mode-insert-line (line)
+(defun ovpn-mode-link-status (status &optional clear)
+  "Update the ovpn-mode current link status with STATUS"
+  (save-excursion
+    (with-current-buffer ovpn-mode-buffer
+      (setq buffer-read-only nil)
+      (goto-char (point-max))
+      ;; delete any existing status line
+      (delete-region
+       (progn (forward-visible-line 0) (point))
+       (progn (forward-visible-line 1) (point)))
+      (setq buffer-read-only t)
+      (unless clear
+        (ovpn-mode-insert-line (format "Link remote status: %s" status) t)))))
+
+(defun ovpn-mode-insert-line (line &optional no-newline)
   "insert a LINE into the main ovpn-mode interface buffer"
   (with-current-buffer ovpn-mode-buffer
     (goto-char (point-max))
     (setq buffer-read-only nil)
-    (insert (format "%s\n" line))
+    (let ((fmt (if no-newline "%s" "%s\n")))
+      (insert (format fmt line)))
     (let* ((ovpn-process (gethash line ovpn-mode-process-map)))
       (cond ((and ovpn-process (process-live-p (struct-ovpn-process-process ovpn-process)))
              (ovpn-mode-highlight-conf line 'hi-green))
             ;; if it's in the list but the process is dead, it's waiting for purging by q
             (ovpn-process
-             (ovpn-mode-highlight-conf line 'hi-red-b))))
+             (ovpn-mode-highlight-conf line 'hi-red-b))
+            ))
     (setq buffer-read-only t)))
 
 (defvar ovpn-mode-process-map (make-hash-table :test 'equal))
@@ -208,7 +224,7 @@
       (save-match-data
         (if (string-match prompts string)
             ;; intercept any sudo prompts with our sudo auth wrapper
-            (if (string-match "*sudo*" string)
+            (if (string-match ".*sudo.*password.*" string)
                 (ovpn-mode-send-sudo-password proc string)
               ;; deal with any ovpn password prompts
               (process-send-string proc (concat (read-passwd
@@ -219,12 +235,13 @@
             ;; Thu Aug  6 16:11:03 2015 UDPv4 link remote: [AF_INET]111.111.111.111:1194
             (save-match-data
               (when (string-match "link remote: \\(.*\\)" string)
-                (let* ((ovpn-process (gethash proc ovpn-mode-process-map)))
+                (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
+                       (link-remote (match-string 1 string)))
                   (when ovpn-process
-                    (setf (struct-ovpn-process-link-remote ovpn-process)
-                          (match-string 1 string))
-                    ;;(message (format "link remote: %s"
-                    ;;                 (struct-ovpn-process-link-remote ovpn-process)))
+                    (setf (struct-ovpn-process-link-remote ovpn-process) link-remote)
+                    ;; update status first time we see link remote, or on ovpn buffer redraws
+                    (let ((conf (struct-ovpn-process-conf ovpn-process)))
+                      (ovpn-mode-link-status (format "%s (%s)" link-remote (file-name-nondirectory conf))))
                     ))))
             (princ (format "%s" string) (process-buffer proc))))))))
 
@@ -336,6 +353,8 @@
       ;; pull the hash table entry for this instance
       (remhash conf ovpn-mode-process-map)
       (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)
+      ;; clear the status line from the mode buffer
+      (ovpn-mode-link-status nil t)
       ;; swap to the associated buffer for convenient killing if desired
       (message (format "Swapping to associated output buffer for %s (kill if you want)"
                        (file-name-nondirectory conf)))
@@ -372,8 +391,8 @@
   "opens the selected ovpn conf for editing"
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-         (when (string-match ".*\\.ovpn" conf)
-           (find-file conf))))
+    (when (string-match ".*\\.ovpn" conf)
+      (find-file conf))))
 
 (defun ovpn ()
   "main entry point for ovpn-mode interface"
@@ -396,7 +415,15 @@
     (ovpn-mode-insert-line "Available openvpn configurations (s start, r restart, q stop):\n")
     (ovpn-mode-pull-configurations ovpn-mode-base-directory)
     (mapc #'(lambda (config) (ovpn-mode-insert-line config)) ovpn-mode-configurations)
-    ;;(hl-line-mode t)
+    (ovpn-mode-insert-line "\n") ; space for link status
+    ;; put any active link status
+    (dolist (conf ovpn-mode-configurations)
+      (let* ((ovpn-process (gethash conf ovpn-mode-process-map))
+             (link-remote (if ovpn-process
+                              (struct-ovpn-process-link-remote ovpn-process)
+                            nil)))
+        (when link-remote
+          (ovpn-mode-link-status (format "%s (%s)" link-remote (file-name-nondirectory conf))))))
     (goto-char (point-min))))
 
 ;; reset default port and process var on buffer kill
