@@ -34,7 +34,7 @@ After writing the initial version, I really started to dislike having to type my
 
 Configure the above according to your local setup, and then add a line like the following to your .authinfo:
 
-`machine ovpn-mode-sudo login root passsword yoursudopasshere"
+`machine ovpn-mode-sudo login root passsword yoursudopasshere`
 
 ovpn-mode will then automagically grab your sudo creds, which makes for smoother sailing in general. Obviously you can also just turn it off if you prefer to just type your password as prompted.
 
