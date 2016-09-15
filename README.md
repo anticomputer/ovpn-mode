@@ -1,5 +1,5 @@
 # ovpn-mode
-An openvpn management mode for Emacs24 that lets you start|stop|restart openvpn configurations.
+An openvpn management mode for Emacs24+ that lets you start|stop|restart openvpn configurations.
 
 ![ovpn-mode screenshot](ovpn-mode.png?raw=true "ovpn-mode")
 
