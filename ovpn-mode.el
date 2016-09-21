@@ -234,14 +234,18 @@
             ))
          (masquerade-cmds-firewalld
           `(
-            ;; it's fine if these already exist, we just go over them again ...
-            ("firewall-cmd" "-q" "--permanent" ,(format "--new-zone=%s" netns))
-            ("firewall-cmd" "-q" "--permanent" ,(format "--zone=%s" netns) "--set-target=default")
-            ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--change-interface=%s" veth-default))
-            ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--add-source=%s" netns-range-default))
+            ;; strictly speaking we only need to turn on the masquerading and we don't need to
+            ;; set a dedicated zone, but I like to have them for more granular port filtering
+            ;; control on the namespace through firewalld ... commented out for casual user sake
+
+            ;; ("firewall-cmd" "-q" "--permanent" ,(format "--new-zone=%s" netns))
+            ;; ("firewall-cmd" "-q" "--permanent" ,(format "--zone=%s" netns) "--set-target=default")
+            ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--change-interface=%s" veth-default))
+            ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--add-source=%s" netns-range-default))
             ;; enable masquerading on default zone
             ("firewall-cmd" "-q"  "--add-masquerade")
             ("firewall-cmd" "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
+
             ))
          )
 
@@ -297,6 +301,8 @@
         (base-id (plist-get netns :base-id)))
 
     ;; XXX: TODO error checking
+    ;; XXX: TODO state restore for iptables mode through iptables-save/iptables-restore
+
     (with-current-buffer netns-buffer
       (cd "/sudo::/")
       (shell-command (format "ip netns delete %s" namespace))
@@ -304,6 +310,7 @@
       (shell-command (format "ip link delete %s" veth-default))
       (shell-command (format "ip link delete %s" veth-vpn))
       (unless (equal (shell-command-to-string "pgrep firewalld") "")
+        ;; allow someone to reset firewalld completely if they want to ... not needed though
         (when (yes-or-no-p "Reset firewalld? (answer no if other ovpn-mode namespaces exist): ")
           (shell-command "systemctl restart firewalld"))))
 
