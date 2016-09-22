@@ -251,7 +251,7 @@
 
     ;; cycle through the setup commands synchronously as root
     (with-current-buffer netns-buffer
-      (cd "/sudo::/")
+      (cd "/sudo::/tmp")
       ;; init namespace
       (dolist (cmd (append setup-cmds
                            ;; check if we're on a firewalld enabled system per chance
@@ -284,7 +284,7 @@
 
     ;; XXX: TODO error checking
     (with-current-buffer netns-buffer
-      (cd "/sudo::/")
+      (cd "/sudo::/tmp")
       ;; wait for the link to actually be up
       (shell-command (format "ip netns exec %s ip route delete default via \"%s\" dev %s"
                              namespace
@@ -304,7 +304,7 @@
     ;; XXX: TODO state restore for iptables mode through iptables-save/iptables-restore
 
     (with-current-buffer netns-buffer
-      (cd "/sudo::/")
+      (cd "/sudo::/tmp")
       (shell-command (format "ip netns delete %s" namespace))
       (shell-command (format "rm -rf /etc/netns/%s" (shell-quote-argument namespace))) ; better safe than sorry, since this is running as root
       (shell-command (format "ip link delete %s" veth-default))
