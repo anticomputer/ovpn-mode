@@ -645,17 +645,18 @@ This assumes any associated certificates live in the same directory as the conf.
     (if netns
         (progn
           (message "Attempting to execute \"%s\" in namespace %s as user %s"
-                   (shell-quote-argument cmd)
+                   cmd
                    (plist-get netns :netns)
                    user)
-          ;; prevent password prompts as much as possible
+          ;; you can do stuff like xterm -e "sudo -u targetuser bash" here
+          ;; to deal with e.g. Xserver annoyances (as user root obviously)
           (ovpn-mode-sudo "ovpn-mode-sudo-exec"
                           (plist-get netns :netns-buffer)
                           "sh" "-c"
                           (format "ip netns exec %s sudo -u %s %s"
                                   (plist-get netns :netns)
                                   user
-                                  (shell-quote-argument cmd))))
+                                  cmd)))
       (message "No associated namespace for this conf"))))
 
 (defun ovpn-mode-edit-vpn ()
