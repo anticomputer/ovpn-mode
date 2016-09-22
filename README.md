@@ -3,6 +3,8 @@ An openvpn management mode for Emacs24+ that lets you start|stop|restart openvpn
 
 ![ovpn-mode screenshot](ovpn-mode.png?raw=true "ovpn-mode")
 
+You can see a demo of the UI in action at https://www.youtube.com/watch?v=kIs8wSWXIHE
+
 ## general usage
 `M-x ovpn` will pop you into the default configuration directory and list any existing .ovpn files from there. You can then interact with that listing with the following single key commands:
 
