@@ -242,6 +242,7 @@
             ;; ("firewall-cmd" "-q" "--permanent" ,(format "--zone=%s" netns) "--set-target=default")
             ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--change-interface=%s" veth-default))
             ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--add-source=%s" netns-range-default))
+
             ;; enable masquerading on default zone
             ("firewall-cmd" "-q"  "--add-masquerade")
             ("firewall-cmd" "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
@@ -294,25 +295,42 @@
 
 (defun ovpn-mode-netns-linux-delete (netns)
   "Delete a given network namespace based on property list NETNS."
+
   (let ((netns-buffer (plist-get netns :netns-buffer))
         (namespace (plist-get netns :netns))
         (veth-default (plist-get netns :veth-default))
         (veth-vpn (plist-get netns :veth-vpn))
-        (base-id (plist-get netns :base-id)))
+        (base-id (plist-get netns :base-id))
+        (netns-range-default (plist-get netns :netns-range-default)))
 
     ;; XXX: TODO error checking
-    ;; XXX: TODO state restore for iptables mode through iptables-save/iptables-restore
 
     (with-current-buffer netns-buffer
       (cd "/sudo::/tmp")
+
+      ;; clear out the namespace and delete the links we created (these might error but you can safely ignore interface not found errors)
       (shell-command (format "ip netns delete %s" namespace))
-      (shell-command (format "rm -rf /etc/netns/%s" (shell-quote-argument namespace))) ; better safe than sorry, since this is running as root
-      (shell-command (format "ip link delete %s" veth-default))
-      (shell-command (format "ip link delete %s" veth-vpn))
-      (unless (equal (shell-command-to-string "pgrep firewalld") "")
-        ;; allow someone to reset firewalld completely if they want to ... not needed though
-        (when (yes-or-no-p "Reset firewalld? (answer no if other ovpn-mode namespaces exist): ")
-          (shell-command "systemctl restart firewalld"))))
+      (shell-command (format "rm -rf /etc/netns/%s" (shell-quote-argument namespace)))
+
+      ;; make these quiet because most likely they'll already be gone
+      (shell-command-to-string (format "ip link delete %s" veth-default))
+      (shell-command-to-string (format "ip link delete %s" veth-vpn))
+
+      ;; as a rule we _only_ cleanup the things we _know_ we changed, we can make no assumptions about turning off masquerading completely
+      ;; even if we gathered state at startup, emacs is routinely running for weeks if not months, so make no assumptions about the general
+      ;; state of the system and the user preferences, only clean up things we _know_ we introduced into the environment
+
+      (cond
+
+       ;; firewalld
+       ((not (equal (shell-command-to-string "pgrep firewalld") ""))
+        (shell-command (format "firewall-cmd -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default)))
+
+       ;; fall through to iptables
+       (t
+        (shell-command (format "iptables -D POSTROUTING --table nat --jump MASQUERADE --source %s" netns-range-default))))
+
+      )
 
     ;; release the base-id for re-use
     (push base-id ovpn-mode-netns-free-base)
