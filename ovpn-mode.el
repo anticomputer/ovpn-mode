@@ -109,6 +109,7 @@
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
     (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
+    (define-key map "C" 'ovpn-mode-spawn-chrome-in-namespace)
     (define-key map "a" 'ovpn-mode-active)
     (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
                          ovpn-mode-platform-specific))
@@ -708,8 +709,46 @@ This assumes any associated certificates live in the same directory as the conf.
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd "root")))
 
+(defun ovpn-mode-spawn-chrome-in-namespace ()
+  "Executes an incognito session of chrome with a namespace dedicated user-data-dir"
+  (interactive)
+  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
+         (ovpn-process (gethash conf ovpn-mode-process-map))
+         (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
+         (data-dir (if netns (shell-quote-argument (plist-get netns :netns)) nil))
+         (user (user-real-login-name))
+         ;; we have to go through an additional /bin/sh -c here because otherwise
+         ;; the && would bust us out of the namespace exec since that is executed
+         ;; through: "ip netns exec %s sudo -u %s %s"
+         (cmd (format "/bin/sh -c \"mkdir /tmp/%s && google-chrome --dns-prefetch-disable --no-referrers --disable-translate --disable-preconnect --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --disable-cloud-import --disable-component-cloud-policy --disable-component-update --disable-sync --connectivity-check-url=https://duckduckgo.com --crash-server-url=http://127.0.0.1 --sync-url=http://127.0.0.1 --incognito --user-data-dir=/tmp/%s && rm -rf /tmp/%s\"" data-dir data-dir data-dir)))
+    (when netns
+      (ovpn-mode-async-shell-command-in-namespace cmd user))))
+
 (defun ovpn-mode-async-shell-command-in-namespace (cmd user)
-  "Executes CMD as USER in the conf associated namespace."
+  "Executes CMD as USER in the conf associated namespace.
+Please be very careful how you use this, as this is passed to the shell directly
+and with root privileges.
+
+Also note that you will have to properly shell escape to ensure you actually
+execute your desired command within the context of the namespace.
+
+E.g. it would be flawed to provide a command like:
+
+something && somethingelse
+
+Since this would expand into:
+
+sh -c ip netns exec namespacename sudo -u user something && somethingelse
+
+Thus something else would execute OUTSIDE the namespace, instead you'd want to do:
+
+/bin/sh -c \"something && somethingelse\"
+
+Which would expand into:
+
+sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethingelse\"
+
+"
   (interactive "sCmd: \nsUser (default current user): \n")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map))
