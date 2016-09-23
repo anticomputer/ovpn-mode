@@ -709,6 +709,8 @@ This assumes any associated certificates live in the same directory as the conf.
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd "root")))
 
+(defvar ovpn-mode-chrome-data-dir-base "/dev/shm")
+
 (defun ovpn-mode-spawn-chrome-in-namespace ()
   "Executes an incognito session of chrome with a namespace dedicated user-data-dir"
   (interactive)
@@ -720,7 +722,13 @@ This assumes any associated certificates live in the same directory as the conf.
          ;; we have to go through an additional /bin/sh -c here because otherwise
          ;; the && would bust us out of the namespace exec since that is executed
          ;; through: "ip netns exec %s sudo -u %s %s"
-         (cmd (format "/bin/sh -c \"mkdir /tmp/%s && google-chrome --dns-prefetch-disable --no-referrers --disable-translate --disable-preconnect --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --disable-cloud-import --disable-component-cloud-policy --disable-component-update --disable-sync --connectivity-check-url=https://duckduckgo.com --crash-server-url=http://127.0.0.1 --sync-url=http://127.0.0.1 --incognito --user-data-dir=/tmp/%s && rm -rf /tmp/%s\"" data-dir data-dir data-dir)))
+         (cmd (format "/bin/sh -c \"mkdir %s/%s && google-chrome --dns-prefetch-disable --no-referrers --disable-translate --disable-preconnect --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --disable-cloud-import --disable-component-cloud-policy --disable-component-update --disable-sync --connectivity-check-url=https://duckduckgo.com --crash-server-url=http://127.0.0.1 --sync-url=http://127.0.0.1 --incognito --user-data-dir=%s/%s && rm -rf %s/%s\""
+                      ovpn-mode-chrome-data-dir-base
+                      data-dir
+                      ovpn-mode-chrome-data-dir-base
+                      data-dir
+                      ovpn-mode-chrome-data-dir-base
+                      data-dir)))
     (when netns
       (ovpn-mode-async-shell-command-in-namespace cmd user))))
 
