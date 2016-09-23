@@ -21,6 +21,7 @@ Additionally you have available:
 - `d`: set the active vpn conf directory
 - `6`: toggle ipv6 support on/off (automatically called on start of ovpn)
 - `x`: execute an asynchronous shell command in the context of any associated namespace
+- `a`: show all active vpn configurations accross all conf directories
 - `h`: describe mode
 
 `M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly.

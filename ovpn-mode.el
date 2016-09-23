@@ -97,6 +97,7 @@
     (define-key map "d" 'ovpn-mode-dir-set)
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
+    (define-key map "a" 'ovpn-mode-active)
     (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
                          ovpn-mode-platform-specific))
     (define-key map "h" 'describe-mode)
@@ -120,6 +121,8 @@
 (defvar ovpn-mode-buffer-name "*ovpn-mode*")
 (defvar ovpn-mode-buffer nil)
 
+;; control buffer switch or kill behavior on stop
+(defvar ovpn-mode-switch-to-buffer-on-stop nil)
 
 ;;; sudo process handling
 
@@ -332,6 +335,10 @@
 
       )
 
+    ;; just clear out buffers unless we explicitly want to keep them around
+    (unless ovpn-mode-switch-to-buffer-on-stop
+      (kill-buffer netns-buffer))
+
     ;; release the base-id for re-use
     (push base-id ovpn-mode-netns-free-base)
 
@@ -399,7 +406,7 @@
        (progn (forward-visible-line 1) (point)))
       (setq buffer-read-only t)
       (unless clear
-        (ovpn-mode-insert-line (format "Link remote status: %s" status) t)))))
+        (ovpn-mode-insert-line (format "Last seen link status: %s" status) t)))))
 
 (defun ovpn-mode-insert-line (line &optional no-newline)
   "insert a LINE into the main ovpn-mode interface buffer"
@@ -455,29 +462,55 @@
                       (ovpn-mode-link-status
                        (format "%s (%s)" link-remote (file-name-nondirectory conf))))
                     ))))
-            ;; drop default routes in namespaces when openvpn is up and running
+
             (when (string-match "Initialization Sequence Completed" string)
               (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
+                     (conf (struct-ovpn-process-conf ovpn-process))
                      (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil)))
-                (when netns
-                  (message "Dropping default route in namespace %s" (plist-get netns :netns))
-                  (ovpn-mode-netns-linux-delete-default-route netns))))
-            (princ (format "%s" string) (process-buffer proc))))))))
+                (message "%s is ready for use!" (file-name-nondirectory conf))
+                (if netns
+                    ;; drop default route in namespaced vpn on full vpn init
+                    (progn
+                      (message "Dropping default route in namespace %s" (plist-get netns :netns))
+                      (ovpn-mode-netns-linux-delete-default-route netns)
+                      (ovpn-mode-unhighlight-conf conf)
+                      (ovpn-mode-highlight-conf conf 'hi-blue))
+                  (progn
+                    (ovpn-mode-unhighlight-conf conf)
+                    (ovpn-mode-highlight-conf conf 'hi-green)))))
+
+            (when (buffer-live-p (process-buffer proc))
+              (princ (format "%s" string) (process-buffer proc)))))))))
 
 (defun ovpn-process-sentinel (proc string)
   (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
          (conf nil))
-    (cond ((and ovpn-process
-                (memq (process-status proc) '(exit signal)))
-           (setq conf  (struct-ovpn-process-conf ovpn-process))
-           (ovpn-mode-unhighlight-conf conf)
-           (ovpn-mode-highlight-conf conf 'hi-red-b)
-           (message (format "Manually q conf \"%s\" to reset state (%s)"
-                            (file-name-nondirectory conf)
-                            (replace-regexp-in-string "\n$" "" string))))
-          (t
-           (princ (format "ovpn-process-sentinel: %s"
-                          (replace-regexp-in-string "\n$" "" string)) (process-buffer proc))))))
+    (cond
+
+     ;; this case implies something happened to our openvpn process without our intervention
+     ;; since the hash-map entry for the process is still active ...
+     ((and ovpn-process
+           (memq (process-status proc) '(exit signal)))
+      (setq conf  (struct-ovpn-process-conf ovpn-process))
+      (ovpn-mode-unhighlight-conf conf)
+      (ovpn-mode-highlight-conf conf 'hi-red-b)
+      (message (format "Manually q conf \"%s\" to reset state (%s)"
+                       (file-name-nondirectory conf)
+                       (replace-regexp-in-string "\n$" "" string))))
+
+     ;; switch on normal finish
+     ((string-match "^finished" string)
+      ;; swap to the associated buffer for convenient killing if desired
+      (when ovpn-mode-switch-to-buffer-on-stop
+        (switch-to-buffer (process-buffer proc))))
+
+     ;; something funky happened ... check it out
+     ((buffer-live-p (process-buffer proc))
+      (message "Abnormal exit of openvpn, switching to buffer for debug")
+      (princ (format "ovpn-process-sentinel: %s"
+                     (replace-regexp-in-string "\n$" "" string)) (process-buffer proc))
+      (switch-to-buffer (process-buffer proc))))
+    ))
 
 (defun ovpn-mode-purge-process-map ()
   (setq ovpn-mode-process-map (make-hash-table :test 'equal)))
@@ -557,10 +590,13 @@ This assumes any associated certificates live in the same directory as the conf.
                     ;; so we can look up by both conf name as well as process
                     (puthash conf ovpn-process ovpn-mode-process-map)
                     (puthash process ovpn-process ovpn-mode-process-map)
-                    ;; highlight the active conf ... blue implies inside a namespace
-                    (if netns
-                        (ovpn-mode-highlight-conf conf 'hi-blue)
-                      (ovpn-mode-highlight-conf conf 'hi-green)))
+                    ;; highlight to the starting state color
+                    ;; pink means 'initializing'
+                    ;; blue means 'namespace vpn ready for use'
+                    ;; green means 'regular vpn ready for use'
+                    (message (format "Started %s, wait for init to complete (n: blue, s: green)"
+                                     (file-name-nondirectory conf)))
+                    (ovpn-mode-highlight-conf conf 'hi-pink))
                 (message (format "Could not start openvpn for %s"
                                  (file-name-nondirectory conf))))))
         (message (format "Already started %s (q to purge)" (file-name-nondirectory conf)))))))
@@ -593,9 +629,6 @@ This assumes any associated certificates live in the same directory as the conf.
                 (set-process-sentinel process 'ovpn-process-sentinel)))
           (message "Target openvpn process no longer alive"))))))
 
-;; so you can control the window switch on stop
-(defvar ovpn-mode-switch-to-buffer-on-stop nil)
-
 (defun ovpn-mode-stop-vpn ()
   "stops openvpn conf through SIGTERM"
   (interactive)
@@ -613,11 +646,7 @@ This assumes any associated certificates live in the same directory as the conf.
       ;; clear out any associated namespace if needed
       (when netns
         (ovpn-mode-netns-linux-delete netns))
-      ;; swap to the associated buffer for convenient killing if desired
-      (when ovpn-mode-switch-to-buffer-on-stop
-        (message (format "Swapping to associated output buffer for %s (kill if you want)"
-                         (file-name-nondirectory conf)))
-        (switch-to-buffer (struct-ovpn-process-buffer ovpn-process))))))
+      )))
 
 (defun ovpn-mode-restart-vpn ()
   "restarts openvpn conf through SIGHUP"
@@ -684,7 +713,12 @@ This assumes any associated certificates live in the same directory as the conf.
     (when (string-match ".*\\.ovpn" conf)
       (find-file conf))))
 
-(defun ovpn ()
+(defun ovpn-mode-active ()
+  "wrapper for the main entry that toggles the active mode"
+  (interactive)
+  (ovpn t))
+
+(defun ovpn (&optional show-active)
   "main entry point for ovpn-mode interface"
   (interactive)
   (cond ((not ovpn-mode-buffer)
@@ -693,8 +727,8 @@ This assumes any associated certificates live in the same directory as the conf.
          (ovpn-mode))
         (t
          (switch-to-buffer ovpn-mode-buffer)))
-  ;; populate with confs if needed
-  (unless ovpn-mode-configurations
+  ;; populate with confs if needed ... if empty or we just want to list active
+  (when (or (not ovpn-mode-configurations) show-active)
     ;; we clear ovpn-mode-configurations on ovpn-mode-dir-set thus triggering
     ;; a redisplay ... ovpn-mode-insert-line will check for any active processes
     ;; associated with a displayed config and highlight accordingly
@@ -703,12 +737,26 @@ This assumes any associated certificates live in the same directory as the conf.
       (erase-buffer)
       (setq buffer-read-only t))
     (ovpn-mode-insert-line
-     "s start, n start with namespace, r restart, q stop/purge\n\nAvailable openvpn configurations:\n")
-    (cond ((file-exists-p ovpn-mode-base-directory)
-           (ovpn-mode-pull-configurations ovpn-mode-base-directory)
-           (mapc #'(lambda (config) (ovpn-mode-insert-line config)) ovpn-mode-configurations))
-          (t
-           (ovpn-mode-insert-line "Please set a valid base directory (d)")))
+     "s start, n start with namespace, r restart, q stop/purge\n\n")
+
+    (cond
+
+     ;; dump any active configurations, regardless of directory base
+     (show-active
+      (ovpn-mode-insert-line "Active openvpn configurations:\n")
+      (maphash #'(lambda (key value)
+                   ;; our hash map contains process objects and conf name strings
+                   (when (stringp key) (ovpn-mode-insert-line key))) ovpn-mode-process-map))
+
+     ;; pull configurations from the active directory base
+     (t
+      (ovpn-mode-insert-line "Available openvpn configurations:\n")
+      (cond ((file-exists-p ovpn-mode-base-directory)
+             (ovpn-mode-pull-configurations ovpn-mode-base-directory)
+             (mapc #'(lambda (config) (ovpn-mode-insert-line config)) ovpn-mode-configurations))
+            (t
+             (ovpn-mode-insert-line "Please set a valid base directory (d)")))))
+
     (ovpn-mode-insert-line "\n") ; space for link status
     ;; put any active link status
     (dolist (conf ovpn-mode-configurations)
