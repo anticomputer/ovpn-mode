@@ -100,6 +100,7 @@
     (define-key map "d" 'ovpn-mode-dir-set)
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
+    (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
     (define-key map "a" 'ovpn-mode-active)
     (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
                          ovpn-mode-platform-specific))
@@ -686,6 +687,16 @@ This assumes any associated certificates live in the same directory as the conf.
     (when ovpn-process
       (switch-to-buffer (struct-ovpn-process-buffer ovpn-process)))))
 
+(defun ovpn-mode-spawn-xterm-in-namespace (user)
+  "Executes an xterm inside of the selected namespace as the desired user"
+  (interactive "sSpawn xterm as (default current user): \n")
+  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
+         (user (if (equal user "") (user-real-login-name) user))
+         (cmd (format "xterm -e \"sudo -u %s PS1=\\\"%s> \\\" /bin/sh\""
+                      user (file-name-nondirectory conf))))
+    ;; we exec this as root because of the priv drop that occurs on the -e
+    (ovpn-mode-async-shell-command-in-namespace cmd "root")))
+
 (defun ovpn-mode-async-shell-command-in-namespace (cmd user)
   "Executes CMD as USER in the conf associated namespace."
   (interactive "sCmd: \nsUser (default current user): \n")
@@ -708,7 +719,7 @@ This assumes any associated certificates live in the same directory as the conf.
                                   (plist-get netns :netns)
                                   user
                                   cmd)))
-      (message "No associated namespace for this conf"))))
+      (message "No associated namespace at point!"))))
 
 (defun ovpn-mode-edit-vpn ()
   "opens the selected ovpn conf for editing"
