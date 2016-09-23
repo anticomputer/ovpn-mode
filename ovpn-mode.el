@@ -554,8 +554,10 @@ This assumes any associated certificates live in the same directory as the conf.
                    (buffer-name (file-name-nondirectory conf))
                    (buffer (generate-new-buffer buffer-name))
                    ;; init a namespace if needed (and supported on platform)
-                   (netns (funcall (struct-ovpn-mode-platform-specific-netns-create
-                                    ovpn-mode-platform-specific))))
+                   (netns (if with-namespace
+                              (funcall (struct-ovpn-mode-platform-specific-netns-create
+                                        ovpn-mode-platform-specific))
+                            nil)))
 
               (when (and with-namespace (not netns))
                 (error "No namespace support on this platform!"))
