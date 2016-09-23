@@ -22,6 +22,7 @@ Additionally you have available:
 - `6`: toggle ipv6 support on/off (automatically called on start of ovpn)
 - `x`: execute an asynchronous shell command in the context of any associated namespace
 - `X`: spawn an xterm in the context of any associated namespace
+- `C`: spawn a google-chrome instance with a dedicated data directory in the context of any associated namespace
 - `a`: show all active vpn configurations accross all conf directories
 - `h`: describe mode
 
