@@ -68,25 +68,33 @@
   ipv6-toggle
   ipv6-status
   netns-create
-  netns-delete)
+  netns-delete
+  netns-delete-default-route)
 
 (defvar ovpn-mode-platform-specific nil)
 
-(cond ((equal ovpn-mode-current-platform 'linux)
-       (setq ovpn-mode-platform-specific
-             (make-struct-ovpn-mode-platform-specific
-              :ipv6-toggle 'ovpn-mode-ipv6-linux-toggle
-              :ipv6-status 'ovpn-mode-ipv6-linux-status
-              :netns-create 'ovpn-mode-netns-linux-create
-              :netns-delete 'ovpn-mode-netns-linux-delete)))
-      (t
-       ;; default to 'ignore non-specifics platform
-       (setq ovpn-mode-platform-specific
-             (make-struct-ovpn-mode-platform-specific
-              :ipv6-toggle 'ignore
-              :ipv6-status 'ignore
-              :netns-create 'ignore
-              :netns-delete 'ignore))))
+(cond
+ ;; we are on a linux
+ ((equal ovpn-mode-current-platform 'linux)
+  (setq ovpn-mode-platform-specific
+        (make-struct-ovpn-mode-platform-specific
+         :ipv6-toggle                'ovpn-mode-ipv6-linux-toggle
+         :ipv6-status                'ovpn-mode-ipv6-linux-status
+         :netns-create               'ovpn-mode-netns-linux-create
+         :netns-delete               'ovpn-mode-netns-linux-delete
+         :netns-delete-default-route 'ovpn-mode-netns-linux-delete-default-route
+         )))
+ ;; we are on some UNIX-like system with openvpn and sudo available
+ (t
+  ;; default to 'ignore non-specifics platform
+  (setq ovpn-mode-platform-specific
+        (make-struct-ovpn-mode-platform-specific
+         :ipv6-toggle                'ignore
+         :ipv6-status                'ignore
+         :netns-create               'ignore
+         :netns-delete               'ignore
+         :netns-delete-default-route 'ignore
+         ))))
 
 (defvar ovpn-mode-map
   (let ((map (make-sparse-keymap)))
@@ -476,7 +484,8 @@
                     ;; drop default route in namespaced vpn on full vpn init
                     (progn
                       (message "Dropping default route in namespace %s" (plist-get netns :netns))
-                      (ovpn-mode-netns-linux-delete-default-route netns)
+                      (funcall (struct-ovpn-mode-platform-specific-netns-delete-default-route
+                                ovpn-mode-platform-specific) netns)
                       (ovpn-mode-unhighlight-conf conf)
                       (ovpn-mode-highlight-conf conf 'hi-blue))
                   (progn
