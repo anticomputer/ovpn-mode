@@ -67,7 +67,8 @@
 (cl-defstruct struct-ovpn-mode-platform-specific
   ipv6-toggle
   ipv6-status
-  netns-create)
+  netns-create
+  netns-delete)
 
 (defvar ovpn-mode-platform-specific nil)
 
@@ -76,14 +77,16 @@
              (make-struct-ovpn-mode-platform-specific
               :ipv6-toggle 'ovpn-mode-ipv6-linux-toggle
               :ipv6-status 'ovpn-mode-ipv6-linux-status
-              :netns-create 'ovpn-mode-netns-linux-create)))
+              :netns-create 'ovpn-mode-netns-linux-create
+              :netns-delete 'ovpn-mode-netns-linux-delete)))
       (t
        ;; default to 'ignore non-specifics platform
        (setq ovpn-mode-platform-specific
              (make-struct-ovpn-mode-platform-specific
               :ipv6-toggle 'ignore
               :ipv6-status 'ignore
-              :netns-create 'ignore))))
+              :netns-create 'ignore
+              :netns-delete 'ignore))))
 
 (defvar ovpn-mode-map
   (let ((map (make-sparse-keymap)))
@@ -550,33 +553,33 @@ This assumes any associated certificates live in the same directory as the conf.
                    (buffer-name (file-name-nondirectory conf))
                    (buffer (generate-new-buffer buffer-name))
                    ;; init a namespace if needed (and supported on platform)
-                   (netns (if with-namespace
-                              (funcall (struct-ovpn-mode-platform-specific-netns-create
-                                        ovpn-mode-platform-specific))
-                            nil)))
-              (message (format "%s" conf))
+                   (netns (funcall (struct-ovpn-mode-platform-specific-netns-create
+                                    ovpn-mode-platform-specific))))
+
+              (when (and with-namespace (not netns))
+                (error "No namespace support on this platform!"))
+
               (setq process
                     (apply 'start-process
                            buffer-name
                            buffer
-                           (if with-namespace
+                           (if (and with-namespace netns)
                                ;; set up an openvpn instance for conf inside a given namespace
-                               (if netns
-                                   (progn
-                                     (message "Starting %s with namespace %s"
-                                              (file-name-nondirectory conf)
-                                              (plist-get netns :netns))
-                                     (list "sudo" "ip" "netns" "exec"
-                                           (format "%s" (plist-get netns :netns))
-                                           "openvpn"
-                                           "--cd" (file-name-directory conf)
-                                           "--config" conf
-                                           "--dev" (plist-get netns :netns-tunvpn)))
-                                 (error "Failed to initialize namespace, aborting!"))
+                               (progn
+                                 (message "Starting %s with namespace %s"
+                                          (file-name-nondirectory conf)
+                                          (plist-get netns :netns))
+                                 (list "sudo" "ip" "netns" "exec"
+                                       (format "%s" (plist-get netns :netns))
+                                       "openvpn"
+                                       "--cd" (file-name-directory conf)
+                                       "--config" conf
+                                       "--dev" (plist-get netns :netns-tunvpn)))
                              ;; just start normally for the main system route
                              (list "sudo" "openvpn"
                                    "--cd" (file-name-directory conf)
                                    "--config" conf))))
+
               (if (process-live-p process)
                   (progn
                     (set-process-filter process 'ovpn-process-filter)
@@ -645,7 +648,8 @@ This assumes any associated certificates live in the same directory as the conf.
       (ovpn-mode-link-status nil t)
       ;; clear out any associated namespace if needed
       (when netns
-        (ovpn-mode-netns-linux-delete netns))
+        (funcall (struct-ovpn-mode-platform-specific-netns-delete
+                  ovpn-mode-platform-specific) netns))
       )))
 
 (defun ovpn-mode-restart-vpn ()
