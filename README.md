@@ -37,24 +37,24 @@ Additionally you have available:
 
 ## namespace integration
 
-This is currently in beta. By starting a configuration with `n` as opposed to `s` you will set up a dedicated network namespace for the openvpn instance to run inside of. Once this namespace is initialized, you can then use `x` to execute commands as a specified user from within that namespace. You can do this for multiple concurrent vpn connections, without affecting your existing main networking routes.
+This is currently in beta. By starting a configuration with `n` as opposed to `s` you will set up a dedicated network namespace for the openvpn instance to run inside of. Once this namespace is initialized, you can then use `x` to execute commands as a specified user from within that namespace. You can do this for multiple concurrent vpn connections, without affecting your existing main networking routes. I've had as many as 20 concurrent namespaced ovpn configurations running, without any issues.
 
 This is convenient to e.g. isolate a specific process to a certain vpn without having to do a bunch of routing. Personally I just spawn an xterm from a namespace and then do whatever I want for that specific vpn instance from that xterm (e.g. start rtorrent, an incognito browser session, etc.)
 
 Convenience commands are `X` to spawn an xterm inside the namespace as a specified user, and `C` to spawn an incognito Google Chrome session with some minor lock-down configurations enabled (e.g. --user-data-dir set to a temporary /dev/shm directory, plugins disabled, client side phishing callbacks disabled, etc.).
 
-You can use `x` to run your commands inside of a selected namespaced ovpn, but please read `C-h f ovpn-mode-async-shell-command RET` before you do for some notes on secure use. It's easy to shoot yourself in the foot by here inproper shell escaping that will lead to execution outside the namespace.  
+As mentioned previously `x` allows you to manually run commands inside of a selected namespaced ovpn, but please read `C-h f ovpn-mode-async-shell-command RET` before you do, for some notes on secure use. It's easy to shoot yourself in the foot here by flawed shell escapes that will lead to execution outside the context of the network namespace.  
 
 Namespace instances will automagically drop the default route for the namespace as soon as the vpn connection is fully initialized. This prevents any process being able to connect out via your default system route (i.e. your real IP address) if a VPN configuration were to fail.
 
-To set the DNS servers to use in these namespaces you can alter:
+To set the default DNS servers to use in these namespaces you can alter:
 
 ```lisp
 (defvar ovpn-mode-netns-ns0 "8.8.8.8") ; ns1 to use in namespace
 (defvar ovpn-mode-netns-ns1 "8.8.4.4") ; ns2 to use in namespace
 ```
 
-These are treated as default nameservers for any active namespaces, however _IF_ you receive a dhcp-option DNS push from the server, ovpn-mode will override these default settings with those provided by the server. You need this behavior to work smoothly with e.g. vpn providers that provide .onion name resolution for a tor bridge. 
+These are treated as default nameservers for any active namespaces, however _IF_ you receive a dhcp-option DNS push from the server in a namespaced context, ovpn-mode will override these default settings with those provided by the server. You need this behavior to work smoothly with e.g. vpn providers that provide .onion name resolution for a tor bridge. 
 
 This work was inspired by crasm's vpnshift.sh script (https://github.com/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple ovpns running at the same time, with minimal user configuration overhead.
 
