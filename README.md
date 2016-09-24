@@ -13,6 +13,13 @@ You can see a demo of the UI in action at https://www.youtube.com/watch?v=48rqO9
 - `q`: stop the selected ovpn
 - `r`: restart the selected ovpn
 
+There's a simple color coding scheme that tells you which state a given ovpn is in:
+
+- red: ovpn has stopped/dropped/broken, use `q` to reset/purge, or `b` to debug
+- pink: VPN is in the process of initializing
+- blue: namespaced VPN is ready for use
+- green: system wide VPN is ready for use
+
 Additionally you have available:
 
 - `i`: remote link info for the selected ovpn
@@ -26,13 +33,17 @@ Additionally you have available:
 - `a`: show all active vpn configurations accross all conf directories
 - `h`: describe mode
 
-`M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly.
+`M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly. This is what `d` is bound to. If you're juggling lots of directories, `a` lets you switch to a view that shows all active ovpn configurations.
 
 ## namespace integration
 
 This is currently in beta. By starting a configuration with `n` as opposed to `s` you will set up a dedicated network namespace for the openvpn instance to run inside of. Once this namespace is initialized, you can then use `x` to execute commands as a specified user from within that namespace. You can do this for multiple concurrent vpn connections, without affecting your existing main networking routes.
 
 This is convenient to e.g. isolate a specific process to a certain vpn without having to do a bunch of routing. Personally I just spawn an xterm from a namespace and then do whatever I want for that specific vpn instance from that xterm (e.g. start rtorrent, an incognito browser session, etc.)
+
+Convenience commands are `X` to spawn an xterm inside the namespace as a specified user, and `C` to spawn an incognito Google Chrome session with some minor lock-down configurations enabled (e.g. --user-data-dir set to a temporary /dev/shm directory, plugins disabled, client side phishing callbacks disabled, etc.).
+
+You can use `x` to run your commands inside of a selected namespaced ovpn, but please read `C-h f ovpn-mode-async-shell-command RET` before you do for some notes on secure use. It's easy to shoot yourself in the foot by here inproper shell escaping that will lead to execution outside the namespace.  
 
 Namespace instances will automagically drop the default route for the namespace as soon as the vpn connection is fully initialized. This prevents any process being able to connect out via your default system route (i.e. your real IP address) if a VPN configuration were to fail.
 
@@ -43,7 +54,9 @@ To set the DNS servers to use in these namespaces you can alter:
 (defvar ovpn-mode-netns-ns1 "8.8.4.4") ; ns2 to use in namespace
 ```
 
-This work was inspired by crasm's vpnshift.sh script (https://github.com/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple vpns running at the same time, with minimal user configuration overhead.
+These are treated as default nameservers for any active namespaces, however _IF_ you receive a dhcp-option DNS push from the server, ovpn-mode will override these default settings with those provided by the server. You need this behavior to work smoothly with e.g. vpn providers that provide .onion name resolution for a tor bridge. 
+
+This work was inspired by crasm's vpnshift.sh script (https://github.com/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple ovpns running at the same time, with minimal user configuration overhead.
 
 ## configuration
 
