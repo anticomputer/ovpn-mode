@@ -625,7 +625,9 @@
                   (shell-command
                    (format
                     "%s -e \"nameserver %s\\n\" > /etc/netns/%s/resolv.conf"
-                    (plist-get ovpn-mode-bin-paths :echo) dns netns-name))))))
+                    (plist-get ovpn-mode-bin-paths :echo)
+                    (shell-quote-argument dns)
+                    netns-name))))))
          ))
 
       (when (buffer-live-p (process-buffer proc))
