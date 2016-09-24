@@ -722,7 +722,7 @@ This assumes any associated certificates live in the same directory as the conf.
          ;; we have to go through an additional /bin/sh -c here because otherwise
          ;; the && would bust us out of the namespace exec since that is executed
          ;; through: "ip netns exec %s sudo -u %s %s"
-         (cmd (format "/bin/sh -c \"mkdir %s/%s && google-chrome --dns-prefetch-disable --no-referrers --disable-translate --disable-preconnect --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --disable-cloud-import --disable-component-cloud-policy --disable-component-update --disable-sync --connectivity-check-url=https://duckduckgo.com --crash-server-url=http://127.0.0.1 --sync-url=http://127.0.0.1 --incognito --user-data-dir=%s/%s && rm -rf %s/%s\""
+         (cmd (format "/bin/sh -c \"mkdir %s/%s && google-chrome --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && rm -rf %s/%s\""
                       ovpn-mode-chrome-data-dir-base
                       data-dir
                       ovpn-mode-chrome-data-dir-base
