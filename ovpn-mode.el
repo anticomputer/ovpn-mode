@@ -613,7 +613,10 @@
           (message "%s is ready for use!" (file-name-nondirectory conf)))
 
          ;; handle DNS options ... overwrite any default servers we're using
-         ((string-match "dhcp-option DNS \\(\\([0-9]+.\\)+[0-9]+\\)" string)
+         ;; we _could_ also dump a proper update-resolv-conf script into our
+         ;; namespace dir, pass that to openvpn via --up and handle updating
+         ;; the NS like that, but this is nicely self-contained
+         ((string-match "PUSH_REPLY.*dhcp-option DNS \\(\\([0-9]+.\\)+[0-9]+\\)" string)
           (if netns
               (let ((dns (match-string 1 string))
                     (netns-buffer (plist-get netns :netns-buffer))
@@ -728,12 +731,15 @@ This assumes any associated certificates live in the same directory as the conf.
                                        "netns" "exec"
                                        (format "%s" (plist-get netns :netns))
                                        openvpn
+                                       ;; be explicitly verbose to the max default range
+                                       "--verb" "4"
                                        "--cd" (file-name-directory conf)
                                        "--config" conf
                                        "--dev" (plist-get netns :netns-tunvpn)))
                              ;; just start normally for the main system route
                              (list sudo
                                    openvpn
+                                   "--verb" "4"
                                    "--cd" (file-name-directory conf)
                                    "--config" conf))))
 
