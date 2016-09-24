@@ -137,6 +137,97 @@
 ;; control buffer switch or kill behavior on stop
 (defvar ovpn-mode-switch-to-buffer-on-stop nil)
 
+(defvar ovpn-mode-search-path
+  "PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin")
+
+;; resolve full paths to binaries we use ... prevent CWD abuse
+(defvar ovpn-mode-bin-paths
+  `(
+
+    ;; build a plist with full paths to any binaries we may use, it's fine if
+    ;; some of them don't exist (e.g. firewall-cmd), since then they won't be
+    ;; used anyways ...
+
+    :ip
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which ip"
+                        ovpn-mode-search-path)))
+
+    :firewall-cmd
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which firewall-cmd"
+                        ovpn-mode-search-path)))
+
+    :mkdir
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which mkdir"
+                        ovpn-mode-search-path)))
+
+    :echo
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which echo"
+                        ovpn-mode-search-path)))
+
+    :sudo
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which sudo"
+                        ovpn-mode-search-path)))
+
+    :sysctl
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which sysctl"
+                        ovpn-mode-search-path)))
+
+    :iptables
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which iptables"
+                        ovpn-mode-search-path)))
+
+    :openvpn
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which openvpn"
+                        ovpn-mode-search-path)))
+
+    :kill
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which kill"
+                        ovpn-mode-search-path)))
+
+    :pgrep
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which pgrep"
+                        ovpn-mode-search-path)))
+
+    :xterm
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which xterm"
+                        ovpn-mode-search-path)))
+
+    :google-chrome
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which google-chrome"
+                        ovpn-mode-search-path)))
+
+    :rm
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which rm"
+                        ovpn-mode-search-path)))
+
+    ))
+
 ;;; sudo process handling
 
 (defun ovpn-mode-send-sudo-password (proc prompt)
@@ -153,7 +244,8 @@
 
 (defmacro ovpn-mode-sudo (name buffer &rest args)
   "sudo exec a command ARGS with name PROC-NAME and output to BUFFER"
-  `(let ((process (start-process ,name ,buffer "sudo" ,@args)))
+  `(let ((process (start-process ,name ,buffer
+                                 ,(plist-get ovpn-mode-bin-paths :sudo) ,@args)))
      (when (process-live-p process)
        (set-process-filter process 'ovpn-mode-sudo-filter))
      process))
@@ -189,6 +281,15 @@
          (veth-default (format "veth_default%d" base-id))
          (veth-vpn (format "veth_vpn%d" base-id))
 
+         ;; bind full bin paths
+         (ip (plist-get ovpn-mode-bin-paths :ip))
+         (firewall-cmd (plist-get ovpn-mode-bin-paths :firewall-cmd))
+         (mkdir (plist-get ovpn-mode-bin-paths :mkdir))
+         (echo (plist-get ovpn-mode-bin-paths :echo))
+         (sudo (plist-get ovpn-mode-bin-paths :sudo))
+         (sysctl (plist-get ovpn-mode-bin-paths :sysctl))
+         (iptables (plist-get ovpn-mode-bin-paths :iptables))
+
          ;; this is a little icky, need some CIDR templating and upper bound checking
          (netns-range-default
           (format "%s/31"
@@ -218,50 +319,41 @@
          (setup-cmds
           `(
             ;; setup the basic namespace
-            ("ip" "netns" "add" ,netns)
-            ("mkdir" "--parents" ,(format "/etc/netns/%s" netns))
-            ("ip" "netns" "exec" ,netns "ip" "address" "add" "127.0.0.1/8" "dev" "lo")
-            ("ip" "netns" "exec" ,netns "ip" "address" "add" "::1/128" "dev" "lo")
-            ("ip" "netns" "exec" ,netns "ip" "link" "set" "lo" "up")
+            (,ip "netns" "add" ,netns)
+            (,mkdir "--parents" ,(format "/etc/netns/%s" netns))
+            (,ip "netns" "exec" ,netns ,ip "address" "add" "127.0.0.1/8" "dev" "lo")
+            (,ip "netns" "exec" ,netns ,ip "address" "add" "::1/128" "dev" "lo")
+            (,ip "netns" "exec" ,netns ,ip "link" "set" "lo" "up")
 
             ;; build a veth tunnel
-            ("ip" "link" "add" ,veth-vpn "type" "veth" "peer" "name" ,veth-default)
-            ("ip" "link" "set" ,veth-vpn "netns" ,netns)
-            ("ip" "link" "set" ,veth-default "up")
-            ("ip" "netns" "exec" ,netns "ip" "link" "set" ,veth-vpn "up")
-            ("ip" "address" "add" ,netns-range-default "dev" ,veth-default)
-            ("ip" "netns" "exec" ,netns "ip" "address" "add" ,netns-range-vpn "dev" ,veth-vpn)
-            ("ip" "netns" "exec" ,netns "ip" "route" "add" "default" "via" ,(car (split-string netns-range-default "/")) "dev" ,veth-vpn)
+            (,ip "link" "add" ,veth-vpn "type" "veth" "peer" "name" ,veth-default)
+            (,ip "link" "set" ,veth-vpn "netns" ,netns)
+            (,ip "link" "set" ,veth-default "up")
+            (,ip "netns" "exec" ,netns ,ip "link" "set" ,veth-vpn "up")
+            (,ip "address" "add" ,netns-range-default "dev" ,veth-default)
+            (,ip "netns" "exec" ,netns ,ip "address" "add" ,netns-range-vpn "dev" ,veth-vpn)
+            (,ip "netns" "exec" ,netns ,ip "route" "add" "default" "via" ,(car (split-string netns-range-default "/")) "dev" ,veth-vpn)
 
             ;; enable IP forwarding ... we just keep this blanket enabled after set initially
-            ("sysctl" "net.ipv4.ip_forward=1")
+            (,sysctl "net.ipv4.ip_forward=1")
 
             ;; set up the dns for the namespace
-            ("echo" "-e" ,(format "\"nameserver %s\\nnameserver %s\\n\""
-                                  ovpn-mode-netns-ns0
-                                  ovpn-mode-netns-ns1)
-             ">" ,(format "/etc/netns/%s/resolv.conf" netns))
+            (,echo "-e" ,(format "\"nameserver %s\\nnameserver %s\\n\""
+                                 ovpn-mode-netns-ns0
+                                 ovpn-mode-netns-ns1)
+                   ">" ,(format "/etc/netns/%s/resolv.conf" netns))
             ))
 
          ;; enable masquerading
          (masquerade-cmds-iptables
           `(
-            ("iptables" "--table" "nat" "--append" "POSTROUTING" "--jump" "MASQUERADE" "--source" ,netns-range-default)
+            (,iptables "--table" "nat" "--append" "POSTROUTING" "--jump" "MASQUERADE" "--source" ,netns-range-default)
             ))
          (masquerade-cmds-firewalld
           `(
-            ;; strictly speaking we only need to turn on the masquerading and we don't need to
-            ;; set a dedicated zone, but I like to have them for more granular port filtering
-            ;; control on the namespace through firewalld ... commented out for casual user sake
-
-            ;; ("firewall-cmd" "-q" "--permanent" ,(format "--new-zone=%s" netns))
-            ;; ("firewall-cmd" "-q" "--permanent" ,(format "--zone=%s" netns) "--set-target=default")
-            ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--change-interface=%s" veth-default))
-            ;; ("firewall-cmd" "-q" ,(format "--zone=%s" netns) ,(format "--add-source=%s" netns-range-default))
-
             ;; enable masquerading on default zone
-            ("firewall-cmd" "-q"  "--add-masquerade")
-            ("firewall-cmd" "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
+            (,firewall-cmd "-q"  "--add-masquerade")
+            (,firewall-cmd "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
 
             ))
          )
@@ -317,7 +409,11 @@
         (veth-default (plist-get netns :veth-default))
         (veth-vpn (plist-get netns :veth-vpn))
         (base-id (plist-get netns :base-id))
-        (netns-range-default (plist-get netns :netns-range-default)))
+        (netns-range-default (plist-get netns :netns-range-default))
+        (ip (plist-get ovpn-mode-bin-paths :ip))
+        (rm (plist-get ovpn-mode-bin-paths :rm))
+        (firewall-cmd (plist-get ovpn-mode-bin-paths :firewall-cmd))
+        (iptables (plist-get ovpn-mode-bin-paths :iptables)))
 
     ;; XXX: TODO error checking
 
@@ -325,12 +421,12 @@
       (cd "/sudo::/tmp")
 
       ;; clear out the namespace and delete the links we created (these might error but you can safely ignore interface not found errors)
-      (shell-command (format "ip netns delete %s" namespace))
-      (shell-command (format "rm -rf /etc/netns/%s" (shell-quote-argument namespace)))
+      (shell-command (format "%s netns delete %s" ip namespace))
+      (shell-command (format "%s -rf /etc/netns/%s" rm (shell-quote-argument namespace)))
 
       ;; make these quiet because most likely they'll already be gone
-      (shell-command-to-string (format "ip link delete %s" veth-default))
-      (shell-command-to-string (format "ip link delete %s" veth-vpn))
+      (shell-command-to-string (format "%s link delete %s" ip veth-default))
+      (shell-command-to-string (format "%s link delete %s" ip veth-vpn))
 
       ;; as a rule we _only_ cleanup the things we _know_ we changed, we can make no assumptions about turning off masquerading completely
       ;; even if we gathered state at startup, emacs is routinely running for weeks if not months, so make no assumptions about the general
@@ -340,11 +436,11 @@
 
        ;; firewalld
        ((not (equal (shell-command-to-string "pgrep firewalld") ""))
-        (shell-command (format "firewall-cmd -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default)))
+        (shell-command (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default)))
 
        ;; fall through to iptables
        (t
-        (shell-command (format "iptables -D POSTROUTING --table nat --jump MASQUERADE --source %s" netns-range-default))))
+        (shell-command (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default))))
 
       )
 
@@ -361,9 +457,19 @@
 
 (defun ovpn-mode-ipv6-linux-status ()
   "message status of IPv6 support"
-  (let ((status_all (shell-command-to-string "sysctl net.ipv6.conf.all.disable_ipv6"))
-        (status_def (shell-command-to-string "sysctl net.ipv6.conf.default.disable_ipv6"))
-        (status_loc (shell-command-to-string "sysctl net.ipv6.conf.lo.disable_ipv6")))
+  (let* ((sysctl (plist-get ovpn-mode-bin-paths :sysctl))
+         (status_all
+          (shell-command-to-string
+           (format "%s net.ipv6.conf.all.disable_ipv6"
+                   sysctl)))
+         (status_def
+          (shell-command-to-string
+           (format "%s net.ipv6.conf.default.disable_ipv6"
+                   sysctl)))
+         (status_loc
+          (shell-command-to-string
+           (format "%s net.ipv6.conf.lo.disable_ipv6"
+                   sysctl))))
     (if (and (string-match "^.*= 1" status_all)
              (string-match "^.*= 1" status_def)
              (string-match "^.*= 1" status_loc))
@@ -387,7 +493,7 @@
   (unless (ovpn-mode-sudo
            "ipv6-linux-sysctl-disable"
            (get-buffer-create "*Messages*")
-           "sysctl"
+           (plist-get ovpn-mode-bin-paths :sysctl)
            "-w" (format "net.ipv6.conf.all.disable_ipv6=%d" on-or-off)
            "-w" (format "net.ipv6.conf.default.disable_ipv6=%d" on-or-off)
            "-w" (format "net.ipv6.conf.lo.disable_ipv6=%d" on-or-off))
@@ -448,53 +554,82 @@
 
 (defun ovpn-process-filter (proc string)
   (when (process-live-p proc)
-    (let ((prompts
-           ;; deal with openvpn auth and 2fa challenge response prompts as well
-           (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\).*: *\\)\\|\\(^.*Enter Google Authenticator Code*\\)"
-                   tramp-password-prompt-regexp)))
+    (let* ((prompts
+            ;; deal with openvpn auth and 2fa challenge response prompts as well
+            (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\).*: *\\)\\|\\(^.*Enter Google Authenticator Code*\\)"
+                    tramp-password-prompt-regexp))
+
+           ;; grab this here because we use it a bunch in our cond
+           (ovpn-process (gethash proc ovpn-mode-process-map))
+           (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
+           (conf (if ovpn-process (struct-ovpn-process-conf ovpn-process) nil)))
+
       (save-match-data
-        (if (string-match prompts string)
-            ;; intercept any sudo prompts with our sudo auth wrapper
-            (if (string-match ".*sudo.*password.*" string)
-                (ovpn-mode-send-sudo-password proc string)
-              ;; deal with any ovpn password prompts
-              (process-send-string proc (concat (read-passwd
-                                                 ;; strip any color control codes
-                                                 (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
-                                                "\n")))
-          (progn
-            ;; Thu Aug  6 16:11:03 2015 UDPv4 link remote: [AF_INET]111.111.111.111:1194
-            (save-match-data
-              (when (string-match "link remote: \\(.*\\)" string)
-                (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
-                       (link-remote (match-string 1 string)))
-                  (when ovpn-process
-                    (setf (struct-ovpn-process-link-remote ovpn-process) link-remote)
-                    ;; update status first time we see link remote, or on ovpn buffer redraws
-                    (let ((conf (struct-ovpn-process-conf ovpn-process)))
-                      (ovpn-mode-link-status
-                       (format "%s (%s)" link-remote (file-name-nondirectory conf))))
-                    ))))
+        (cond
 
-            (when (string-match "Initialization Sequence Completed" string)
-              (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
-                     (conf (struct-ovpn-process-conf ovpn-process))
-                     (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil)))
-                (message "%s is ready for use!" (file-name-nondirectory conf))
-                (if netns
-                    ;; drop default route in namespaced vpn on full vpn init
-                    (progn
-                      (message "Dropping default route in namespace %s" (plist-get netns :netns))
-                      (funcall (struct-ovpn-mode-platform-specific-netns-delete-default-route
-                                ovpn-mode-platform-specific) netns)
-                      (ovpn-mode-unhighlight-conf conf)
-                      (ovpn-mode-highlight-conf conf 'hi-blue))
-                  (progn
-                    (ovpn-mode-unhighlight-conf conf)
-                    (ovpn-mode-highlight-conf conf 'hi-green)))))
+         ;; handle password/auth prompts
+         ((string-match prompts string)
 
-            (when (buffer-live-p (process-buffer proc))
-              (princ (format "%s" string) (process-buffer proc)))))))))
+          ;; intercept any sudo prompts with our sudo auth wrapper
+          ;; do very exact matching on the prompt so that a vpn server
+          ;; can't trick us into dumping them our sudo password ;P
+
+          ;; XXX: verify servers can't push newlines into openvpn log output
+          ;; XXX: not entirely confident this can't be bypassed yet ...
+          (if (string-match "^\\[sudo\\] password for.*" string)
+              (ovpn-mode-send-sudo-password proc string)
+            ;; deal with any ovpn password prompts
+            (process-send-string
+             proc
+             (concat (read-passwd
+                      ;; strip any color control codes
+                      (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
+                     "\n"))))
+
+         ;; handle link remote info
+         ((string-match "link remote: \\(.*\\)" string)
+          (let ((link-remote (match-string 1 string)))
+            (when ovpn-process
+              (setf (struct-ovpn-process-link-remote ovpn-process) link-remote)
+              ;; update status first time we see link remote, or on ovpn buffer redraws
+              (ovpn-mode-link-status
+               (format "%s (%s)" link-remote (file-name-nondirectory conf))))))
+
+         ;; handle init complete
+         ((string-match "Initialization Sequence Completed" string)
+          (if netns
+              ;; drop default route in namespaced vpn on full vpn init
+              (progn
+                (message "Dropping default route in namespace %s" (plist-get netns :netns))
+                (funcall (struct-ovpn-mode-platform-specific-netns-delete-default-route
+                          ovpn-mode-platform-specific) netns)
+                ;; namespace vpn highlight
+                (ovpn-mode-unhighlight-conf conf)
+                (ovpn-mode-highlight-conf conf 'hi-blue))
+            ;; global vpn highlight
+            (progn
+              (ovpn-mode-unhighlight-conf conf)
+              (ovpn-mode-highlight-conf conf 'hi-green)))
+          (message "%s is ready for use!" (file-name-nondirectory conf)))
+
+         ;; handle DNS options ... overwrite any default servers we're using
+         ((string-match "dhcp-option DNS \\(\\([0-9]+.\\)+[0-9]+\\)" string)
+          (if netns
+              (let ((dns (match-string 1 string))
+                    (netns-buffer (plist-get netns :netns-buffer))
+                    (netns-name (plist-get netns :netns)))
+                (message "Setting DNS option for %s to nameserver %s"
+                         (file-name-nondirectory conf) dns)
+                (with-current-buffer netns-buffer
+                  (cd "/sudo::/tmp")
+                  (shell-command
+                   (format
+                    "%s -e \"nameserver %s\\n\" > /etc/netns/%s/resolv.conf"
+                    (plist-get ovpn-mode-bin-paths :echo) dns netns-name))))))
+         ))
+
+      (when (buffer-live-p (process-buffer proc))
+        (princ (format "%s" string) (process-buffer proc))))))
 
 (defun ovpn-process-sentinel (proc string)
   (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
@@ -567,7 +702,11 @@ This assumes any associated certificates live in the same directory as the conf.
                    (netns (if with-namespace
                               (funcall (struct-ovpn-mode-platform-specific-netns-create
                                         ovpn-mode-platform-specific))
-                            nil)))
+                            nil))
+                   ;; bin paths
+                   (sudo (plist-get ovpn-mode-bin-paths :sudo))
+                   (ip (plist-get ovpn-mode-bin-paths :ip))
+                   (openvpn (plist-get ovpn-mode-bin-paths :openvpn)))
 
               (when (and with-namespace (not netns))
                 (error "No namespace support on this platform!"))
@@ -582,14 +721,17 @@ This assumes any associated certificates live in the same directory as the conf.
                                  (message "Starting %s with namespace %s"
                                           (file-name-nondirectory conf)
                                           (plist-get netns :netns))
-                                 (list "sudo" "ip" "netns" "exec"
+                                 (list sudo
+                                       ip
+                                       "netns" "exec"
                                        (format "%s" (plist-get netns :netns))
-                                       "openvpn"
+                                       openvpn
                                        "--cd" (file-name-directory conf)
                                        "--config" conf
                                        "--dev" (plist-get netns :netns-tunvpn)))
                              ;; just start normally for the main system route
-                             (list "sudo" "openvpn"
+                             (list sudo
+                                   openvpn
                                    "--cd" (file-name-directory conf)
                                    "--config" conf))))
 
@@ -625,20 +767,23 @@ This assumes any associated certificates live in the same directory as the conf.
       (let* ((process (struct-ovpn-process-process ovpn-process))
              (buffer (struct-ovpn-process-buffer ovpn-process))
              (conf (struct-ovpn-process-conf ovpn-process))
-             (buffer-name (struct-ovpn-process-buffer-name ovpn-process)))
+             (buffer-name (struct-ovpn-process-buffer-name ovpn-process))
+             (sudo (plist-get ovpn-mode-bin-paths :sudo))
+             (kill (plist-get ovpn-mode-bin-paths :kill))
+             (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
         ;; sudo doesn't relay all signals (e.g. SIGKILL), so to ensure
         ;; that ANY signal we send ends up at the right process, we send
         ;; it directly to the sudo child (which is our actual openvpn proc)
         (if (process-live-p process)
             (let* ((cpid (string-to-number (shell-command-to-string
-                                            (format "pgrep -P %d"
-                                                    (process-id process))))))
+                                            (format "%s -P %d"
+                                                    pgrep (process-id process))))))
               (progn
                 (setq process (start-process
                                (format "ovpn-mode-stop: %s (pid: %d)"
                                        buffer-name (process-id process))
                                buffer
-                               "sudo" "kill"
+                               sudo kill
                                (format "-%d" sig)
                                (format "%d" cpid)))
                 (set-process-filter process 'ovpn-process-filter)
@@ -704,7 +849,9 @@ This assumes any associated certificates live in the same directory as the conf.
   (interactive "sSpawn xterm as (default current user): \n")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (user (if (equal user "") (user-real-login-name) user))
-         (cmd (format "xterm -e \"sudo -u %s PS1=\\\"%s> \\\" /bin/sh\""
+         (cmd (format "%s -e \"%s -u %s PS1=\\\"%s> \\\" /bin/sh\""
+                      (plist-get ovpn-mode-bin-paths :xterm)
+                      (plist-get ovpn-mode-bin-paths :sudo)
                       user (file-name-nondirectory conf))))
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd "root")))
@@ -722,11 +869,13 @@ This assumes any associated certificates live in the same directory as the conf.
          ;; we have to go through an additional /bin/sh -c here because otherwise
          ;; the && would bust us out of the namespace exec since that is executed
          ;; through: "ip netns exec %s sudo -u %s %s"
-         (cmd (format "/bin/sh -c \"mkdir %s/%s && google-chrome --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && rm -rf %s/%s\""
+         (cmd (format "/bin/sh -c \"mkdir %s/%s && %s --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && %s -rf %s/%s\""
                       ovpn-mode-chrome-data-dir-base
                       data-dir
+                      (plist-get ovpn-mode-bin-paths :google-chrome)
                       ovpn-mode-chrome-data-dir-base
                       data-dir
+                      (plist-get ovpn-mode-bin-paths :rm)
                       ovpn-mode-chrome-data-dir-base
                       data-dir)))
     (when netns
@@ -772,9 +921,10 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
           ;; to deal with e.g. Xserver annoyances (as user root obviously)
           (ovpn-mode-sudo "ovpn-mode-sudo-exec"
                           (plist-get netns :netns-buffer)
-                          "sh" "-c"
-                          (format "ip netns exec %s sudo -u %s %s"
+                          "/bin/sh" "-c"
+                          (format "ip netns exec %s %s -u %s %s"
                                   (plist-get netns :netns)
+                                  (plist-get ovpn-mode-bin-paths :sudo)
                                   user
                                   cmd)))
       (message "No associated namespace at point!"))))
