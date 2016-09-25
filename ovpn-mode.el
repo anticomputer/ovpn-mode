@@ -389,14 +389,17 @@
   (let* ((netns-buffer (plist-get netns :netns-buffer))
          (netns-range-default (plist-get netns :netns-range-default))
          (veth-vpn (plist-get netns :veth-vpn))
-         (namespace (plist-get netns :netns)))
+         (namespace (plist-get netns :netns))
+         (ip (plist-get ovpn-mode-bin-paths :ip)))
 
     ;; XXX: TODO error checking
     (with-current-buffer netns-buffer
       (cd "/sudo::/tmp")
       ;; wait for the link to actually be up
-      (shell-command (format "ip netns exec %s ip route delete default via \"%s\" dev %s"
+      (shell-command (format "%s netns exec %s %s route delete default via \"%s\" dev %s"
+                             ip
                              namespace
+                             ip
                              (car (split-string netns-range-default "/"))
                              veth-vpn)))
     ))
