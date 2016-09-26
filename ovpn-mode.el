@@ -295,13 +295,13 @@
           (format "%s/31"
                   (mapconcat
                    #'(lambda (x) (format "%d" x))
-                   `[10 10 ,(+ 10 base-id) 10] ; 10.10.10.10/31 base
+                   `[10 255 ,base-id 10] ; 10.255.X.10/31 base
                    ".")))
          (netns-range-vpn
           (format "%s/31"
                   (mapconcat
                    #'(lambda (x) (format "%d" x))
-                   `[10 10 ,(+ 10 base-id) 11] ; 10.10.10.11/31 base
+                   `[10 255 ,base-id 11] ; 10.255.X.11/31 base
                    ".")))
 
          ;; the device set for openvpn inside the namespace
@@ -691,6 +691,7 @@
 
 (defun ovpn-mode-start-vpn (&optional with-namespace)
   "Starts openvpn conf at point.
+
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
   ;; disable ipv6 (if so desired, and supported on the current platform)
@@ -894,6 +895,7 @@ This assumes any associated certificates live in the same directory as the conf.
 
 (defun ovpn-mode-async-shell-command-in-namespace (cmd user)
   "Executes CMD as USER in the conf associated namespace.
+
 Please be very careful how you use this, as this is passed to the shell directly
 and with root privileges.
 
