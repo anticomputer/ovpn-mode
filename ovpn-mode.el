@@ -35,25 +35,34 @@
 (require 'cl)
 (require 'netrc)
 
-;;; sudo auth convenience functions
-(defvar ovpn-mode-authinfo (expand-file-name "~/.authinfo.gpg"))
-(defvar ovpn-mode-authinfo-token "ovpn-mode-sudo")
-(defvar ovpn-mode-use-authinfo t) ; set to nil if you prefer to be prompted
+(defgroup ovpn nil
+  "An OpenVPN management mode for Emacs."
+  :prefix "ovpn-mode"
+  :group  'comm)
 
-;; add "machine ovpn-mode-sudo login root password yoursudopassword" to .authinfo
-;; if you don't want to be prompted for your sudo password all the time
-(defun ovpn-mode-pull-authinfo ()
-  "Pulls an .authinfo password for machine `ovpn-mode-authinfo-token'"
-  (let* ((netrc (netrc-parse ovpn-mode-authinfo))
-         (hostentry (netrc-machine netrc ovpn-mode-authinfo-token)))
-    (when hostentry (netrc-get hostentry "password"))))
+(defcustom ovpn-mode-hook nil
+  "Hook run after `ovpn-mode' has completely set up the buffer."
+  :type  'hook
+  :group 'ovpn)
 
-;;; this is where all your openvpn confs live, if not using absolute certificate paths
-;;; in your .ovpn's then we assume the certificates are in the same directory as the conf
-(defvar ovpn-mode-base-directory "~/vpn/default")
+(defcustom ovpn-mode-authinfo "~/.authinfo.gpg"
+  "The netrc auth source for ovpn-mode's sudo authentication helpers."
+  :type  'string
+  :group 'ovpn)
 
-(defvar ovpn-mode-hook nil
-  "Hook being run after `ovpn-mode' has completely set up the buffer.")
+(defcustom ovpn-mode-use-authinfo t
+  "Enable ovpn-mode sudo auth helper.
+
+Add \"machine ovpn-mode-sudo login root password yoursudopassword\" to the
+auth source for ovpn-mode as specified in `ovpn-mode-authinfo' to use the
+sudo wrappers."
+  :type  'boolean
+  :group 'ovpn)
+
+(defcustom ovpn-mode-base-directory "~/vpn/default"
+  "Default base directory for .ovpn configurations."
+  :type  'string
+  :group 'ovpn)
 
 ;;; major mode for future buffer and keymap enhancements
 (defvar ovpn-mode-keywords '("ovpn"))
@@ -229,6 +238,14 @@
     ))
 
 ;;; sudo process handling
+(defvar ovpn-mode-authinfo-token "ovpn-mode-sudo")
+
+;; add "machine ovpn-mode-sudo login root password yoursudopassword" to .authinfo
+(defun ovpn-mode-pull-authinfo ()
+  "Pulls an .authinfo password for machine `ovpn-mode-authinfo-token'"
+  (let* ((netrc (netrc-parse (expand-file-name ovpn-mode-authinfo)))
+         (hostentry (netrc-machine netrc ovpn-mode-authinfo-token)))
+    (when hostentry (netrc-get hostentry "password"))))
 
 (defun ovpn-mode-send-sudo-password (proc prompt)
   (let ((password (or (when ovpn-mode-use-authinfo
@@ -258,8 +275,15 @@
 (defvar ovpn-mode-netns-base 0)
 (defvar ovpn-mode-netns-free-base '()) ; :P
 
-(defvar ovpn-mode-netns-ns0 "8.8.8.8") ; ns1 to use in namespace
-(defvar ovpn-mode-netns-ns1 "8.8.4.4") ; ns2 to use in namespace
+(defcustom ovpn-mode-netns-ns0 "8.8.8.8"
+  "Default NS0 to use in ovpn-mode namespaces."
+  :type  'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-netns-ns1 "8.8.4.4"
+  "Default NS1 to use in ovpn-mode namespaces."
+  :type  'string
+  :group 'ovpn)
 
 (defun ovpn-mode-netns-linux-create ()
   "Return a prop list containing an active namespace description"
