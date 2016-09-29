@@ -47,12 +47,7 @@ As mentioned previously `x` allows you to manually run commands inside of a sele
 
 Namespace instances will automagically drop the default route for the namespace as soon as the vpn connection is fully initialized. This prevents any process being able to connect out via your default system route (i.e. your real IP address) if a VPN configuration were to fail.
 
-To set the default DNS servers to use in these namespaces you can alter:
-
-```lisp
-(defvar ovpn-mode-netns-ns0 "8.8.8.8") ; ns1 to use in namespace
-(defvar ovpn-mode-netns-ns1 "8.8.4.4") ; ns2 to use in namespace
-```
+To set the default DNS servers to use in these namespaces you can alter `ovpn-mode-netns-ns0` and `ovpn-mode-netns-ns0` through the customize interface under the `ovpn` group (M-x customize RET).
 
 These are treated as default nameservers for any active namespaces, however _IF_ you receive a dhcp-option DNS push from the server in a namespaced context, ovpn-mode will override these default settings with those provided by the server. You need this behavior to work smoothly with e.g. vpn providers that provide .onion name resolution for a tor bridge. 
 
@@ -64,14 +59,9 @@ After writing the initial version, I really started to dislike having to type my
 Please note that due to needing synchronous execution of configuration commands, this is not enabled for namespace initialization, and you _will_ be prompted for your sudo password by tramp for
 that.
 
-```lisp
-;;; sudo auth convenience functions
-(defvar ovpn-mode-authinfo (expand-file-name "~/.authinfo.gpg"))
-(defvar ovpn-mode-authinfo-token "ovpn-mode-sudo")
-(defvar ovpn-mode-use-authinfo t) ; set to nil if you prefer to be prompted
-```
+To configure the sudo auth wrapper, you can configure `ovpn-mode-use-authinfo`, `ovpn-mode-authinfo`, and `ovpn-mode-authinfo-token`, respectively, through the customize interface under the `ovpn` group (M-x customize RET)
 
-Configure the above according to your local setup, and then add a line like the following to your .authinfo:
+Configure the above according to your local setup, and then add a line like the following to the .authinfo file specified in `ovpn-mode-authinfo`:
 
 `machine ovpn-mode-sudo login root passsword yoursudopasshere`
 
