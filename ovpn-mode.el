@@ -118,6 +118,7 @@ sudo wrappers."
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
     (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
+    (define-key map "R" 'ovpn-mode-spawn-rtorrent-screen-in-namespace)
     (define-key map "C" 'ovpn-mode-spawn-chrome-in-namespace)
     (define-key map "a" 'ovpn-mode-active)
     (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
@@ -221,6 +222,18 @@ sudo wrappers."
     ,(replace-regexp-in-string
       "\n$" "" (shell-command-to-string
                 (format "%s which xterm"
+                        ovpn-mode-search-path)))
+
+    :screen
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which screen"
+                        ovpn-mode-search-path)))
+
+    :rtorrent
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which rtorrent"
                         ovpn-mode-search-path)))
 
     :google-chrome
@@ -885,12 +898,27 @@ This assumes any associated certificates live in the same directory as the conf.
   (interactive "sSpawn xterm as (default current user): \n")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (user (if (equal user "") (user-real-login-name) user))
+         (proc-name (format "xterm-%s-%s" user (file-name-nondirectory conf)))
          (cmd (format "%s -e \"%s -u %s PS1=\\\"%s> \\\" /bin/sh\""
                       (plist-get ovpn-mode-bin-paths :xterm)
                       (plist-get ovpn-mode-bin-paths :sudo)
                       user (file-name-nondirectory conf))))
     ;; we exec this as root because of the priv drop that occurs on the -e
-    (ovpn-mode-async-shell-command-in-namespace cmd "root")))
+    (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
+
+(defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir)
+  "Executes a headless screen rtorrent in selected namespace USER.
+Use `screen -list' to find and attach your desired namespaced rtorrent instance."
+  (interactive "sSpawn headless screen based rtorrent as (default current user): \nfrtorrent session directory: \n")
+  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
+         (user (if (equal user "") (user-real-login-name) user))
+         (proc-name (format "rtorrent-%s" (file-name-nondirectory conf)))
+         ;; run screen -dmS headless so we're not locked to emacs terminal support for the screen process
+         (cmd (format "%s -DmS %s %s -s %s"
+                      (plist-get ovpn-mode-bin-paths :screen) proc-name
+                      (plist-get ovpn-mode-bin-paths :rtorrent) dir)))
+    ;; we exec this as root because of the priv drop that occurs on the -e
+    (ovpn-mode-async-shell-command-in-namespace cmd user proc-name)))
 
 (defvar ovpn-mode-chrome-data-dir-base "/dev/shm")
 
@@ -902,6 +930,7 @@ This assumes any associated certificates live in the same directory as the conf.
          (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
          (data-dir (if netns (shell-quote-argument (plist-get netns :netns)) nil))
          (user (user-real-login-name))
+         (proc-name (format "chrome-%s-%s" user (file-name-nondirectory conf)))
          ;; we have to go through an additional /bin/sh -c here because otherwise
          ;; the && would bust us out of the namespace exec since that is executed
          ;; through: "ip netns exec %s sudo -u %s %s"
@@ -915,9 +944,9 @@ This assumes any associated certificates live in the same directory as the conf.
                       ovpn-mode-chrome-data-dir-base
                       data-dir)))
     (when netns
-      (ovpn-mode-async-shell-command-in-namespace cmd user))))
+      (ovpn-mode-async-shell-command-in-namespace cmd user proc-name))))
 
-(defun ovpn-mode-async-shell-command-in-namespace (cmd user)
+(defun ovpn-mode-async-shell-command-in-namespace (cmd user &optional proc-name)
   "Executes CMD as USER in the conf associated namespace.
 
 Please be very careful how you use this, as this is passed to the shell directly
@@ -956,14 +985,15 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
                    user)
           ;; you can do stuff like xterm -e "sudo -u targetuser bash" here
           ;; to deal with e.g. Xserver annoyances (as user root obviously)
-          (ovpn-mode-sudo "ovpn-mode-sudo-exec"
-                          (plist-get netns :netns-buffer)
-                          "/bin/sh" "-c"
-                          (format "ip netns exec %s %s -u %s %s"
-                                  (plist-get netns :netns)
-                                  (plist-get ovpn-mode-bin-paths :sudo)
-                                  user
-                                  cmd)))
+          (ovpn-mode-sudo
+           (or proc-name "ovpn-mode-sudo-exec")
+           (plist-get netns :netns-buffer)
+           "/bin/sh" "-c"
+           (format "ip netns exec %s %s -u %s %s"
+                   (plist-get netns :netns)
+                   (plist-get ovpn-mode-bin-paths :sudo)
+                   user
+                   cmd)))
       (message "No associated namespace at point!"))))
 
 (defun ovpn-mode-edit-vpn ()
