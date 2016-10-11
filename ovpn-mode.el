@@ -388,7 +388,10 @@ sudo wrappers."
             ))
          (masquerade-cmds-firewalld
           `(
-            ;; enable masquerading on default zone
+            ;; add interface to default zone
+            (,firewall-cmd "-q" ,(format "--add-interface=%s" veth-default))
+
+            ;; enable masquerading on the default zone
             (,firewall-cmd "-q"  "--add-masquerade")
             (,firewall-cmd "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
 
@@ -476,7 +479,8 @@ sudo wrappers."
 
        ;; firewalld
        ((not (equal (shell-command-to-string "pgrep firewalld") ""))
-        (shell-command (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default)))
+        (shell-command (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
+        (shell-command (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
 
        ;; fall through to iptables
        (t
@@ -914,9 +918,9 @@ Use `screen -list' to find and attach your desired namespaced rtorrent instance.
          (user (if (equal user "") (user-real-login-name) user))
          (proc-name (format "rtorrent-%s" (file-name-nondirectory conf)))
          ;; run screen -dmS headless so we're not locked to emacs terminal support for the screen process
-         (cmd (format "%s -DmS %s %s -s %s"
+         (cmd (format "%s -fa -DmS %s %s -s %s -d %s"
                       (plist-get ovpn-mode-bin-paths :screen) proc-name
-                      (plist-get ovpn-mode-bin-paths :rtorrent) dir)))
+                      (plist-get ovpn-mode-bin-paths :rtorrent) dir dir)))
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd user proc-name)))
 
