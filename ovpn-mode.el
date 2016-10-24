@@ -372,7 +372,7 @@ sudo wrappers."
             (,ip "netns" "exec" ,netns ,ip "route" "add" "default" "via" ,(car (split-string netns-range-default "/")) "dev" ,veth-vpn)
 
             ;; enable IP forwarding ... we just keep this blanket enabled after set initially
-            (,sysctl "net.ipv4.ip_forward=1")
+            (,sysctl "-w" "net.ipv4.ip_forward=1")
 
             ;; set up the dns for the namespace
             (,echo "-e" ,(format "\"nameserver %s\\nnameserver %s\\n\""
