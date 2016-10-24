@@ -910,18 +910,32 @@ This assumes any associated certificates live in the same directory as the conf.
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
 
-(defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir)
+(defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir torrent)
   "Executes a headless screen rtorrent in selected namespace USER.
 Use `screen -list' to find and attach your desired namespaced rtorrent instance."
-  (interactive "sSpawn headless screen based rtorrent as (default current user): \nfrtorrent session directory: \n")
+  (interactive "sSpawn rtorrent in screen as (default current user): \nfDownload directory: \nsTorrent URI (default no URI): ")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (user (if (equal user "") (user-real-login-name) user))
+         (torrent (if (equal torrent "") nil torrent))
          (proc-name (format "rtorrent-%s" (file-name-nondirectory conf)))
          ;; run screen -dmS headless so we're not locked to emacs terminal support for the screen process
-         (cmd (format "%s -fa -DmS %s %s -s %s -d %s"
-                      (plist-get ovpn-mode-bin-paths :screen) proc-name
-                      (plist-get ovpn-mode-bin-paths :rtorrent) dir dir)))
-    ;; we exec this as root because of the priv drop that occurs on the -e
+         (cmd
+          (cond (torrent
+                 ;; start with a torrent
+                 (format "%s -fa -DmS %s %s -s %s -d %s \"%s\""
+                         (plist-get ovpn-mode-bin-paths :screen) proc-name
+                         (plist-get ovpn-mode-bin-paths :rtorrent)
+                         dir
+                         dir
+                         torrent))
+                (t
+                 ;; start without a torrent
+                 (format "%s -fa -DmS %s %s -s %s -d %s"
+                         (plist-get ovpn-mode-bin-paths :screen) proc-name
+                         (plist-get ovpn-mode-bin-paths :rtorrent)
+                         dir
+                         dir)))
+          ))
     (ovpn-mode-async-shell-command-in-namespace cmd user proc-name)))
 
 (defvar ovpn-mode-chrome-data-dir-base "/dev/shm")
@@ -938,7 +952,7 @@ Use `screen -list' to find and attach your desired namespaced rtorrent instance.
          ;; we have to go through an additional /bin/sh -c here because otherwise
          ;; the && would bust us out of the namespace exec since that is executed
          ;; through: "ip netns exec %s sudo -u %s %s"
-         (cmd (format "/bin/sh -c \"mkdir %s/%s && %s --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && %s -rf %s/%s\""
+         (cmd (format "/bin/sh -c \"mkdir %s/%s; %s --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && %s -rf %s/%s\""
                       ovpn-mode-chrome-data-dir-base
                       data-dir
                       (plist-get ovpn-mode-bin-paths :google-chrome)

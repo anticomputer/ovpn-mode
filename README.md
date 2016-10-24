@@ -51,7 +51,7 @@ To set the default DNS servers to use in these namespaces you can alter `ovpn-mo
 
 These are treated as default nameservers for any active namespaces, however _IF_ you receive a dhcp-option DNS push from the server in a namespaced context, ovpn-mode will override these default settings with those provided by the server. You need this behavior to work smoothly with e.g. vpn providers that provide .onion name resolution for a tor bridge. 
 
-This work was inspired by crasm's vpnshift.sh script (https://github.com/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple ovpns running at the same time, with minimal user configuration overhead.
+This work was inspired by crasm's vpnshift.sh script (https://github.com/crasm/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple ovpns running at the same time, with minimal user configuration overhead.
 
 ## configuration
 
