@@ -288,12 +288,12 @@ sudo wrappers."
 (defvar ovpn-mode-netns-base 0)
 (defvar ovpn-mode-netns-free-base '()) ; :P
 
-(defcustom ovpn-mode-netns-ns0 "8.8.8.8"
+(defcustom ovpn-mode-netns-ns0 "208.67.222.222"
   "Default NS0 to use in ovpn-mode namespaces."
   :type  'string
   :group 'ovpn)
 
-(defcustom ovpn-mode-netns-ns1 "8.8.4.4"
+(defcustom ovpn-mode-netns-ns1 "208.67.220.220"
   "Default NS1 to use in ovpn-mode namespaces."
   :type  'string
   :group 'ovpn)
