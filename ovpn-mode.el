@@ -69,9 +69,6 @@ sudo wrappers."
 (defvar ovpn-mode-keywords-regexp (regexp-opt ovpn-mode-keywords 'words))
 (defvar ovpn-mode-font-lock-keywords `((,ovpn-mode-keywords-regexp . font-lock-keyword-face)))
 
-;;; this is used for platform specific quirks
-(defvar ovpn-mode-current-platform 'linux)
-
 ;;; struct so that we can expand this easily
 (cl-defstruct struct-ovpn-mode-platform-specific
   ipv6-toggle
@@ -84,7 +81,7 @@ sudo wrappers."
 
 (cond
  ;; we are on a linux
- ((equal ovpn-mode-current-platform 'linux)
+ ((eq system-type 'gnu/linux)
   (setq ovpn-mode-platform-specific
         (make-struct-ovpn-mode-platform-specific
          :ipv6-toggle                'ovpn-mode-ipv6-linux-toggle
@@ -148,7 +145,7 @@ sudo wrappers."
 (defvar ovpn-mode-switch-to-buffer-on-stop nil)
 
 (defvar ovpn-mode-search-path
-  "PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin")
+  "PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/opt/local/sbin:/opt/local/bin")
 
 ;; resolve full paths to binaries we use ... prevent CWD abuse
 (defvar ovpn-mode-bin-paths
