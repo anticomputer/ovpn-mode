@@ -758,6 +758,14 @@ This assumes any associated certificates live in the same directory as the conf.
               (when (and with-namespace (not netns))
                 (error "No namespace support on this platform!"))
 
+              ;; if you are using something else, ensure a "openvpn" binary exists in ovpn-mode-search-path, this may
+              ;; require a symlink e.g. for macports openvpn2 please symlink /opt/local/sbin/openvpn2 to /opt/local/sbin/openvpn
+              (when (string= openvpn "")
+                (error "No openvpn binary found in ovpn-mode-search-path"))
+
+              (when (string= sudo "")
+                (error "No sudo binary found in ovpn-mode-search-path"))
+
               (setq process
                     (apply 'start-process
                            buffer-name
