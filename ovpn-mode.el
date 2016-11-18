@@ -45,20 +45,6 @@
   :type  'hook
   :group 'ovpn)
 
-(defcustom ovpn-mode-authinfo "~/.authinfo.gpg"
-  "The netrc auth source for ovpn-mode's sudo authentication helpers."
-  :type  'string
-  :group 'ovpn)
-
-(defcustom ovpn-mode-use-authinfo t
-  "Enable ovpn-mode sudo auth helper.
-
-Add \"machine ovpn-mode-sudo login root password yoursudopassword\" to the
-auth source for ovpn-mode as specified in `ovpn-mode-authinfo' to use the
-sudo wrappers."
-  :type  'boolean
-  :group 'ovpn)
-
 (defcustom ovpn-mode-base-directory "~/vpn/default"
   "Default base directory for .ovpn configurations."
   :type  'string
@@ -179,12 +165,6 @@ sudo wrappers."
                 (format "%s which echo"
                         ovpn-mode-search-path)))
 
-    :sudo
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which sudo"
-                        ovpn-mode-search-path)))
-
     :sysctl
     ,(replace-regexp-in-string
       "\n$" "" (shell-command-to-string
@@ -247,35 +227,15 @@ sudo wrappers."
 
     ))
 
-;;; sudo process handling
-(defvar ovpn-mode-authinfo-token "ovpn-mode-sudo")
-
-;; add "machine ovpn-mode-sudo login root password yoursudopassword" to .authinfo
-(defun ovpn-mode-pull-authinfo ()
-  "Pulls an .authinfo password for machine `ovpn-mode-authinfo-token'"
-  (let* ((netrc (netrc-parse (expand-file-name ovpn-mode-authinfo)))
-         (hostentry (netrc-machine netrc ovpn-mode-authinfo-token)))
-    (when hostentry (netrc-get hostentry "password"))))
-
-(defun ovpn-mode-send-sudo-password (proc prompt)
-  (let ((password (or (when ovpn-mode-use-authinfo
-                        (ovpn-mode-pull-authinfo))
-                      (read-passwd prompt))))
-    (process-send-string proc (concat password "\n"))))
-
-(defun ovpn-mode-sudo-filter (proc string)
-  (when (process-live-p proc)
-    (if (string-match tramp-password-prompt-regexp string)
-        (ovpn-mode-send-sudo-password proc string)
-      (mapcar 'message (split-string string "\n")))))
-
 (defmacro ovpn-mode-sudo (name buffer &rest args)
   "sudo exec a command ARGS with name PROC-NAME and output to BUFFER"
-  `(let ((process (start-process ,name ,buffer
-                                 ,(plist-get ovpn-mode-bin-paths :sudo) ,@args)))
-     (when (process-live-p process)
-       (set-process-filter process 'ovpn-mode-sudo-filter))
-     process))
+  `(with-current-buffer ,buffer
+     (cd "/sudo::/tmp")
+     (let ((process (start-file-process ,name ,buffer ,@args)))
+       (when (process-live-p process)
+         (set-process-filter process
+                             #'(lambda (proc string)
+                                 (mapc 'message (split-string string "\n"))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
 
@@ -510,9 +470,9 @@ sudo wrappers."
           (shell-command-to-string
            (format "%s net.ipv6.conf.lo.disable_ipv6"
                    sysctl))))
-    (if (and (string-match "^.*= 1" status_all)
-             (string-match "^.*= 1" status_def)
-             (string-match "^.*= 1" status_loc))
+    (if (and (string-match-p "^.*= 1" status_all)
+             (string-match-p "^.*= 1" status_def)
+             (string-match-p "^.*= 1" status_loc))
         ;; disabled
         nil
       ;; enabled
@@ -608,23 +568,19 @@ sudo wrappers."
         (cond
 
          ;; handle password/auth prompts
-         ((string-match prompts string)
+         ((string-match-p prompts string)
 
           ;; intercept any sudo prompts with our sudo auth wrapper
           ;; do very exact matching on the prompt so that a vpn server
           ;; can't trick us into dumping them our sudo password ;P
 
-          ;; XXX: verify servers can't push newlines into openvpn log output
-          ;; XXX: not entirely confident this can't be bypassed yet ...
-          (if (string-match "^\\[sudo\\] password for.*" string)
-              (ovpn-mode-send-sudo-password proc string)
-            ;; deal with any ovpn password prompts
-            (process-send-string
-             proc
-             (concat (read-passwd
-                      ;; strip any color control codes
-                      (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
-                     "\n"))))
+          ;; deal with any ovpn password prompts
+          (process-send-string
+           proc
+           (concat (read-passwd
+                    ;; strip any color control codes
+                    (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
+                   "\n")))
 
          ;; handle link remote info
          ((string-match "link remote: \\(.*\\)" string)
@@ -636,7 +592,7 @@ sudo wrappers."
                (format "%s (%s)" link-remote (file-name-nondirectory conf))))))
 
          ;; handle init complete
-         ((string-match "Initialization Sequence Completed" string)
+         ((string-match-p "Initialization Sequence Completed" string)
           (if netns
               ;; drop default route in namespaced vpn on full vpn init
               (progn
@@ -688,12 +644,12 @@ sudo wrappers."
       (setq conf  (struct-ovpn-process-conf ovpn-process))
       (ovpn-mode-unhighlight-conf conf)
       (ovpn-mode-highlight-conf conf 'hi-red-b)
-      (message (format "Manually q conf \"%s\" to reset state (%s)"
-                       (file-name-nondirectory conf)
-                       (replace-regexp-in-string "\n$" "" string))))
+      (message "Manually q conf \"%s\" to reset state (%s)"
+               (file-name-nondirectory conf)
+               (replace-regexp-in-string "\n$" "" string)))
 
      ;; switch on normal finish
-     ((string-match "^finished" string)
+     ((string-match-p "^finished" string)
       ;; swap to the associated buffer for convenient killing if desired
       (when ovpn-mode-switch-to-buffer-on-stop
         (switch-to-buffer (process-buffer proc))))
@@ -732,16 +688,13 @@ sudo wrappers."
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
   ;; disable ipv6 (if so desired, and supported on the current platform)
-  (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status
-                  ovpn-mode-platform-specific))
-    (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle
-              ovpn-mode-platform-specific)))
+  (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status ovpn-mode-platform-specific))
+    (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle ovpn-mode-platform-specific)))
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-    (when (string-match ".*\\.ovpn" conf)
+    (when (string-match-p ".*\\.ovpn" conf)
       (if (not (gethash conf ovpn-mode-process-map))
           (progn
-            (let* ((process nil)
-                   (default-directory (file-name-directory conf))
+            (let* ((default-directory (file-name-directory conf))
                    (buffer-name (file-name-nondirectory conf))
                    (buffer (generate-new-buffer buffer-name))
                    ;; init a namespace if needed (and supported on platform)
@@ -750,7 +703,6 @@ This assumes any associated certificates live in the same directory as the conf.
                                         ovpn-mode-platform-specific))
                             nil))
                    ;; bin paths
-                   (sudo (plist-get ovpn-mode-bin-paths :sudo))
                    (ip (plist-get ovpn-mode-bin-paths :ip))
                    (openvpn (plist-get ovpn-mode-bin-paths :openvpn)))
 
@@ -762,60 +714,56 @@ This assumes any associated certificates live in the same directory as the conf.
               (when (string= openvpn "")
                 (error "No openvpn binary found in ovpn-mode-search-path"))
 
-              (when (string= sudo "")
-                (error "No sudo binary found in ovpn-mode-search-path"))
-
-              (setq process
-                    (apply 'start-process
-                           buffer-name
-                           buffer
-                           (if (and with-namespace netns)
-                               ;; set up an openvpn instance for conf inside a given namespace
-                               (progn
-                                 (message "Starting %s with namespace %s"
-                                          (file-name-nondirectory conf)
-                                          (plist-get netns :netns))
-                                 (list sudo
-                                       ip
-                                       "netns" "exec"
-                                       (format "%s" (plist-get netns :netns))
-                                       openvpn
-                                       ;; be explicitly verbose to the max default range
-                                       "--verb" "4"
-                                       "--cd" (file-name-directory conf)
-                                       "--config" conf
-                                       "--dev" (plist-get netns :netns-tunvpn)))
-                             ;; just start normally for the main system route
-                             (list sudo
-                                   openvpn
-                                   "--verb" "4"
-                                   "--cd" (file-name-directory conf)
-                                   "--config" conf))))
-
-              (if (process-live-p process)
-                  (progn
-                    (set-process-filter process 'ovpn-process-filter)
-                    (set-process-sentinel process 'ovpn-process-sentinel)
-                    ;; throw the process struct into the lookup maps
-                    (let ((ovpn-process (make-struct-ovpn-process
-                                         :buffer buffer
-                                         :buffer-name buffer-name
-                                         :process process
-                                         :conf conf
-                                         :netns netns)))
-                      ;; so we can look up by both conf name as well as process
-                      (puthash conf ovpn-process ovpn-mode-process-map)
-                      (puthash process ovpn-process ovpn-mode-process-map))
-                    ;; highlight to the starting state color
-                    ;; pink means 'initializing'
-                    ;; blue means 'namespace vpn ready for use'
-                    ;; green means 'regular vpn ready for use'
-                    (message (format "Started %s, wait for init to complete (n: blue, s: green)"
-                                     (file-name-nondirectory conf)))
-                    (ovpn-mode-highlight-conf conf 'hi-pink))
-                (message (format "Could not start openvpn for %s"
-                                 (file-name-nondirectory conf))))))
-        (message (format "Already started %s (q to purge)" (file-name-nondirectory conf)))))))
+              (with-current-buffer buffer
+                (cd "/sudo::/tmp")
+                (let ((process (apply 'start-file-process
+                                      buffer-name
+                                      buffer
+                                      (if (and with-namespace netns)
+                                          ;; set up an openvpn instance for conf inside a given namespace
+                                          (progn
+                                            (message "Starting %s with namespace %s"
+                                                     (file-name-nondirectory conf)
+                                                     (plist-get netns :netns))
+                                            (list ip
+                                                  "netns" "exec"
+                                                  (format "%s" (plist-get netns :netns))
+                                                  openvpn
+                                                  ;; be explicitly verbose to the max default range
+                                                  "--verb" "4"
+                                                  "--cd" (file-name-directory conf)
+                                                  "--config" conf
+                                                  "--dev" (plist-get netns :netns-tunvpn)))
+                                        ;; just start normally for the main system route
+                                        (list openvpn
+                                              "--verb" "4"
+                                              "--cd" (file-name-directory conf)
+                                              "--config" conf)))))
+                  (if (process-live-p process)
+                      (progn
+                        (set-process-filter process 'ovpn-process-filter)
+                        (set-process-sentinel process 'ovpn-process-sentinel)
+                        ;; throw the process struct into the lookup maps
+                        (let ((ovpn-process (make-struct-ovpn-process
+                                             :buffer buffer
+                                             :buffer-name buffer-name
+                                             :process process
+                                             :conf conf
+                                             :netns netns)))
+                          ;; so we can look up by both conf name as well as process
+                          (puthash conf ovpn-process ovpn-mode-process-map)
+                          (puthash process ovpn-process ovpn-mode-process-map))
+                        ;; highlight to the starting state color
+                        ;; pink means 'initializing'
+                        ;; blue means 'namespace vpn ready for use'
+                        ;; green means 'regular vpn ready for use'
+                        (message "Started %s, wait for init to complete (n: blue, s: green)"
+                                 (file-name-nondirectory conf))
+                        (ovpn-mode-highlight-conf conf 'hi-pink))
+                    ;; else
+                    (message "Could not start openvpn for %s" (file-name-nondirectory conf)))))))
+        ;; else
+        (message "Already started %s (q to purge)" (file-name-nondirectory conf))))))
 
 ;;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
@@ -825,26 +773,23 @@ This assumes any associated certificates live in the same directory as the conf.
       (let* ((process (struct-ovpn-process-process ovpn-process))
              (buffer (struct-ovpn-process-buffer ovpn-process))
              (buffer-name (struct-ovpn-process-buffer-name ovpn-process))
-             (sudo (plist-get ovpn-mode-bin-paths :sudo))
              (kill (plist-get ovpn-mode-bin-paths :kill))
              (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
-        ;; sudo doesn't relay all signals (e.g. SIGKILL), so to ensure
-        ;; that ANY signal we send ends up at the right process, we send
-        ;; it directly to the sudo child (which is our actual openvpn proc)
         (if (process-live-p process)
-            (let* ((cpid (string-to-number (shell-command-to-string
-                                            (format "%s -P %d"
-                                                    pgrep (process-id process))))))
-              (progn
-                (setq process (start-process
-                               (format "ovpn-mode-stop: %s (pid: %d)"
-                                       buffer-name (process-id process))
-                               buffer
-                               sudo kill
-                               (format "-%d" sig)
-                               (format "%d" cpid)))
-                (set-process-filter process 'ovpn-process-filter)
-                (set-process-sentinel process 'ovpn-process-sentinel)))
+            ;;(let* ((cpid (string-to-number
+            ;;(shell-command-to-string
+            ;;(format "%s -P %d" pgrep (process-id process))))))
+
+            (ovpn-mode-sudo
+             "ovpn-mode-signal-process"
+             buffer
+             kill
+             (format "-%d" sig)
+             (format "%d" (process-id process))
+             )
+
+          ;; )
+
           (message "Target openvpn process no longer alive"))))))
 
 (defun ovpn-mode-stop-vpn ()
@@ -1022,7 +967,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
   "opens the selected ovpn conf for editing"
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-    (when (string-match ".*\\.ovpn" conf)
+    (when (string-match-p ".*\\.ovpn" conf)
       (find-file conf))))
 
 (defun ovpn-mode-active ()

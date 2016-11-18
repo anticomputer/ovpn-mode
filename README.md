@@ -53,19 +53,9 @@ These are treated as default nameservers for any active namespaces, however _IF_
 
 This work was inspired by crasm's vpnshift.sh script (https://github.com/crasm/vpnshift.sh) but implemented in elisp and enhanced to allow for concurrent namespaces and multiple ovpns running at the same time, with minimal user configuration overhead.
 
-## configuration
+## privilege handling
 
-After writing the initial version, I really started to dislike having to type my sudo password all the time, so I've included some logic for automatic sudo authentication for people that want it.
-Please note that due to needing synchronous execution of configuration commands, this is not enabled for namespace initialization, and you _will_ be prompted for your sudo password by tramp for
-that.
-
-To configure the sudo auth wrapper, you can configure `ovpn-mode-use-authinfo`, `ovpn-mode-authinfo`, and `ovpn-mode-authinfo-token`, respectively, through the customize interface under the `ovpn` group (M-x customize RET)
-
-Configure the above according to your local setup, and then add a line like the following to the .authinfo file specified in `ovpn-mode-authinfo`:
-
-`machine ovpn-mode-sudo login root passsword yoursudopasshere`
-
-ovpn-mode will then automagically grab your sudo creds, which makes for smoother sailing in general. Obviously you can also just turn it off if you prefer to just type your password as prompted.
+All sudo privilege handling happens through the emacs TRAMP layer. The initial versions of ovpn-mode include custom sudo handling, but this opened potential attack surface through ovpn server log tampering to match our sudo password prompt regex. Not in any directly exploitable way, but enough to make me completely remove any manual sudo privilege handling from the ovpn-mode code. So all privilege handling just occurs through "/sudo::/tmp" TRAMP paths and start-file-process now.
 
 ## notes
 This is something I wrote to fit my exact use case (i.e. I like to be able to pop into and out of multiple openvpn configurations). It should work on any UNIX-like system that has sudo and openvpn available but I've only tested it on Linux.
