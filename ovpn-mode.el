@@ -320,7 +320,6 @@ sudo wrappers."
          (firewall-cmd (plist-get ovpn-mode-bin-paths :firewall-cmd))
          (mkdir (plist-get ovpn-mode-bin-paths :mkdir))
          (echo (plist-get ovpn-mode-bin-paths :echo))
-         (sudo (plist-get ovpn-mode-bin-paths :sudo))
          (sysctl (plist-get ovpn-mode-bin-paths :sysctl))
          (iptables (plist-get ovpn-mode-bin-paths :iptables))
 
@@ -797,15 +796,16 @@ This assumes any associated certificates live in the same directory as the conf.
                   (progn
                     (set-process-filter process 'ovpn-process-filter)
                     (set-process-sentinel process 'ovpn-process-sentinel)
-                    (setq ovpn-process (make-struct-ovpn-process
-                                        :buffer buffer
-                                        :buffer-name buffer-name
-                                        :process process
-                                        :conf conf
-                                        :netns netns))
-                    ;; so we can look up by both conf name as well as process
-                    (puthash conf ovpn-process ovpn-mode-process-map)
-                    (puthash process ovpn-process ovpn-mode-process-map)
+                    ;; throw the process struct into the lookup maps
+                    (let ((ovpn-process (make-struct-ovpn-process
+                                         :buffer buffer
+                                         :buffer-name buffer-name
+                                         :process process
+                                         :conf conf
+                                         :netns netns)))
+                      ;; so we can look up by both conf name as well as process
+                      (puthash conf ovpn-process ovpn-mode-process-map)
+                      (puthash process ovpn-process ovpn-mode-process-map))
                     ;; highlight to the starting state color
                     ;; pink means 'initializing'
                     ;; blue means 'namespace vpn ready for use'
@@ -824,7 +824,6 @@ This assumes any associated certificates live in the same directory as the conf.
     (progn
       (let* ((process (struct-ovpn-process-process ovpn-process))
              (buffer (struct-ovpn-process-buffer ovpn-process))
-             (conf (struct-ovpn-process-conf ovpn-process))
              (buffer-name (struct-ovpn-process-buffer-name ovpn-process))
              (sudo (plist-get ovpn-mode-bin-paths :sudo))
              (kill (plist-get ovpn-mode-bin-paths :kill))
