@@ -141,6 +141,12 @@
     ;; some of them don't exist (e.g. firewall-cmd), since then they won't be
     ;; used anyways ...
 
+    :sudo
+    ,(replace-regexp-in-string
+      "\n$" "" (shell-command-to-string
+                (format "%s which sudo"
+                        ovpn-mode-search-path)))
+
     :ip
     ,(replace-regexp-in-string
       "\n$" "" (shell-command-to-string
