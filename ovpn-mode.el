@@ -288,6 +288,7 @@
          (echo (plist-get ovpn-mode-bin-paths :echo))
          (sysctl (plist-get ovpn-mode-bin-paths :sysctl))
          (iptables (plist-get ovpn-mode-bin-paths :iptables))
+         (pgrep (plist-get ovpn-mode-bin-paths :pgrep))
 
          ;; this is a little icky, need some CIDR templating and upper bound checking
          (netns-range-default
@@ -366,7 +367,7 @@
       ;; init namespace
       (dolist (cmd (append setup-cmds
                            ;; check if we're on a firewalld enabled system per chance
-                           (if (equal (shell-command-to-string "pgrep firewalld") "")
+                           (if (equal (shell-command-to-string (format "%s firewalld" pgrep)) "")
                                masquerade-cmds-iptables
                              (progn
                                (message "Firewalld is running on this system, diverting masquerade setup")
@@ -418,7 +419,8 @@
         (ip (plist-get ovpn-mode-bin-paths :ip))
         (rm (plist-get ovpn-mode-bin-paths :rm))
         (firewall-cmd (plist-get ovpn-mode-bin-paths :firewall-cmd))
-        (iptables (plist-get ovpn-mode-bin-paths :iptables)))
+        (iptables (plist-get ovpn-mode-bin-paths :iptables))
+        (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
 
     ;; XXX: TODO error checking
 
@@ -440,7 +442,7 @@
       (cond
 
        ;; firewalld
-       ((not (equal (shell-command-to-string "pgrep firewalld") ""))
+       ((not (equal (shell-command-to-string (format "%s firewalld" pgrep)) ""))
         (shell-command (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
         (shell-command (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
 
