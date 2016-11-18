@@ -773,23 +773,12 @@ This assumes any associated certificates live in the same directory as the conf.
       (let* ((process (struct-ovpn-process-process ovpn-process))
              (buffer (struct-ovpn-process-buffer ovpn-process))
              (buffer-name (struct-ovpn-process-buffer-name ovpn-process))
-             (kill (plist-get ovpn-mode-bin-paths :kill))
-             (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
+             (kill (plist-get ovpn-mode-bin-paths :kill)))
         (if (process-live-p process)
-            ;;(let* ((cpid (string-to-number
-            ;;(shell-command-to-string
-            ;;(format "%s -P %d" pgrep (process-id process))))))
-
             (ovpn-mode-sudo
              "ovpn-mode-signal-process"
              buffer
-             kill
-             (format "-%d" sig)
-             (format "%d" (process-id process))
-             )
-
-          ;; )
-
+             kill (format "-%d" sig) (format "%d" (process-id process)))
           (message "Target openvpn process no longer alive"))))))
 
 (defun ovpn-mode-stop-vpn ()
