@@ -723,7 +723,7 @@ This assumes any associated certificates live in the same directory as the conf.
                 (error "No openvpn binary found in ovpn-mode-search-path"))
 
               (with-current-buffer buffer
-                (cd "/sudo::/tmp")
+                (cd (format "/sudo::%s" default-directory))
                 (let ((process (apply 'start-file-process
                                       buffer-name
                                       buffer
