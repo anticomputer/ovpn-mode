@@ -500,7 +500,8 @@
   "disable ipv6 support via sysctl to value of ON-OR-OFF"
   (unless (ovpn-mode-sudo
            "ipv6-linux-sysctl-disable"
-           (get-buffer-create "*Messages*")
+           ;;(get-buffer-create "*Messages*")
+           (current-buffer)
            (plist-get ovpn-mode-bin-paths :sysctl)
            "-w" (format "net.ipv6.conf.all.disable_ipv6=%d" on-or-off)
            "-w" (format "net.ipv6.conf.default.disable_ipv6=%d" on-or-off)
