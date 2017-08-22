@@ -243,6 +243,12 @@
                              #'(lambda (proc string)
                                  (mapc 'message (split-string string "\n"))))))))
 
+;; only use this for safety critical commands
+(defun ovpn-mode-assert-shell-command (cmd)
+  "Assert that a shell-command did not return error"
+  (assert (equal 0 (shell-command cmd)) t
+          (format "Error executing: %s" cmd)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
 
 ;; namespace management ... inspired by https://github.com/crasm/vpnshift.sh
@@ -306,8 +312,6 @@
 
          ;; the device set for openvpn inside the namespace
          (netns-tunvpn (format "tunvpn%d" base-id))
-
-         ;; XXX: TODO add error checking ... a failure in any of these is a fail for *
 
          ;; initialize namespace ... not shell escaping any args because we
          ;; explicitly control the content of the variables here (see above)
@@ -374,7 +378,11 @@
                                masquerade-cmds-firewalld))))
         (let ((cmd (mapconcat #'(lambda (x) (format "%s" x)) cmd " ")))
           (message "ovpn-mode sudo executing: %s" cmd)
-          (shell-command cmd))))
+
+          ;; pull the chute hard on failure here
+          (ovpn-mode-assert-shell-command cmd)
+
+          )))
 
     ;; return the relevant property list for this namespace
     `(:netns ,netns
@@ -395,16 +403,16 @@
          (namespace (plist-get netns :netns))
          (ip (plist-get ovpn-mode-bin-paths :ip)))
 
-    ;; XXX: TODO error checking
     (with-current-buffer netns-buffer
       (cd "/sudo::/tmp")
       ;; wait for the link to actually be up
-      (shell-command (format "%s netns exec %s %s route delete default via \"%s\" dev %s"
-                             ip
-                             namespace
-                             ip
-                             (car (split-string netns-range-default "/"))
-                             veth-vpn)))
+      (ovpn-mode-assert-shell-command
+       (format "%s netns exec %s %s route delete default via \"%s\" dev %s"
+               ip
+               namespace
+               ip
+               (car (split-string netns-range-default "/"))
+               veth-vpn)))
     ))
 
 (defun ovpn-mode-netns-linux-delete (netns)
@@ -422,7 +430,7 @@
         (iptables (plist-get ovpn-mode-bin-paths :iptables))
         (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
 
-    ;; XXX: TODO error checking
+    ;; failure here is less critical
 
     (with-current-buffer netns-buffer
       (cd "/sudo::/tmp")
@@ -443,12 +451,15 @@
 
        ;; firewalld
        ((not (equal (shell-command-to-string (format "%s firewalld" pgrep)) ""))
-        (shell-command (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
-        (shell-command (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
+        (ovpn-mode-assert-shell-command
+         (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
+        (ovpn-mode-assert-shell-command
+         (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
 
        ;; fall through to iptables
        (t
-        (shell-command (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default))))
+        (ovpn-mode-assert-shell-command
+         (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default))))
 
       )
 
@@ -949,7 +960,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
                    (plist-get netns :netns)
                    user)
           ;; you can do stuff like xterm -e "sudo -u targetuser bash" here
-          ;; to deal with e.g. Xserver annoyances (as user root obviously)
+          ;; to deal with e.g. X server annoyances (as user root obviously)
           (ovpn-mode-sudo
            (or proc-name "ovpn-mode-sudo-exec")
            (plist-get netns :netns-buffer)
