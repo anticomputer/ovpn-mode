@@ -1005,7 +1005,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
 
      ;; pull configurations from the active directory base
      (t
-      (ovpn-mode-insert-line "Available openvpn configurations:\n")
+      (ovpn-mode-insert-line (format "Available configurations in %s:\n" ovpn-mode-base-directory))
       (cond ((file-exists-p ovpn-mode-base-directory)
              (ovpn-mode-pull-configurations ovpn-mode-base-directory)
              (mapc #'(lambda (config) (ovpn-mode-insert-line config)) ovpn-mode-configurations))
