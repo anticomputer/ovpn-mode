@@ -707,11 +707,13 @@
 
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
-  ;; disable ipv6 (if so desired, and supported on the current platform)
-  (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status ovpn-mode-platform-specific))
-    (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle ovpn-mode-platform-specific)))
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
     (when (string-match-p ".*\\.ovpn" conf)
+
+      ;; disable ipv6 (if so desired, and supported on the current platform)
+      (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status ovpn-mode-platform-specific))
+        (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle ovpn-mode-platform-specific)))
+
       (if (not (gethash conf ovpn-mode-process-map))
           (progn
             (let* ((default-directory (file-name-directory conf))
