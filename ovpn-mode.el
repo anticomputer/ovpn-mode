@@ -626,7 +626,7 @@
             (progn
               (ovpn-mode-unhighlight-conf conf)
               (ovpn-mode-highlight-conf conf 'hi-green)))
-          (message "%s is ready for use!" (file-name-nondirectory conf)))
+          (message "%s (re)initialized" (file-name-nondirectory conf)))
 
          ;; handle DNS options ... overwrite any default servers we're using
          ;; we _could_ also dump a proper update-resolv-conf script into our
