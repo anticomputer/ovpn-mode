@@ -50,6 +50,36 @@
   :type  'string
   :group 'ovpn)
 
+(defcustom ovpn-mode-authinfo-path "~/.authinfo.gpg"
+  "Path to authinfo data"
+  :type 'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-check-authinfo t
+  "Check authinfo for configname.ovpn associated user:pass data."
+  :type 'boolean
+  :group 'ovpn)
+
+;; authinfo handling
+(require 'netrc)
+
+(defun ovpn-mode-pull-authinfo (config)
+  "Return a LIST of user and password for a given config or NIL.
+
+Example authinfo entry: machine CONFIG.OVPN login USER password PASS
+"
+  (let* ((netrc (netrc-parse (expand-file-name ovpn-mode-authinfo-path)))
+         (machine-entry (netrc-machine netrc config)))
+    (if machine-entry
+        (list (netrc-get machine-entry "login")
+              (netrc-get machine-entry "password"))
+      nil)))
+
+(defun ovpn-mode-clear-authinfo-cache ()
+  "Call this if you add new ovnp-mode authinfo data in a running emacs instance."
+  (interactive)
+  (setq netrc-cache nil))
+
 ;;; major mode for future buffer and keymap enhancements
 (defvar ovpn-mode-keywords '("ovpn"))
 (defvar ovpn-mode-keywords-regexp (regexp-opt ovpn-mode-keywords 'words))
@@ -572,6 +602,15 @@
 ;;; we use tramp's password prompt matcher
 (require 'tramp)
 
+;; deal with any ovpn password prompts
+(defun ovpn-mode-push-prompt-input (proc prompt)
+  "Echo a control char stripped prompt to retrieve requested user input."
+  (process-send-string
+   proc
+   (concat (read-passwd
+            (replace-regexp-in-string "\e\\[[0-9;]*m" "" prompt))
+           "\n")))
+
 (defun ovpn-process-filter (proc string)
   (when (process-live-p proc)
     (let* ((prompts
@@ -590,17 +629,26 @@
          ;; handle password/auth prompts
          ((string-match-p prompts string)
 
-          ;; intercept any sudo prompts with our sudo auth wrapper
-          ;; do very exact matching on the prompt so that a vpn server
-          ;; can't trick us into dumping them our sudo password ;P
-
           ;; deal with any ovpn password prompts
-          (process-send-string
-           proc
-           (concat (read-passwd
-                    ;; strip any color control codes
-                    (replace-regexp-in-string "\e\\[[0-9;]*m" "" string))
-                   "\n")))
+          (if ovpn-mode-check-authinfo
+              (let ((authinfo (ovpn-mode-pull-authinfo (file-name-nondirectory conf))))
+                (if (and authinfo (equal (length authinfo) 2))
+                    (cond
+                     ;; add other user/password prompts here as they come up
+                     ((string-match-p "^.*Enter Auth Username.*: *" string)
+                      (message "ovpn-mode: passing in authinfo based username")
+                      (process-send-string proc (concat (nth 0 authinfo) "\n")))
+                     ((string-match-p "^.*Enter Auth Password.*: *" string)
+                      (message "ovpn-mode: passing in authinfo based password")
+                      (process-send-string proc (concat (nth 1 authinfo) "\n")))
+                     ;; play safe and fall through to manual for any unknown prompts
+                     (t
+                      (ovpn-mode-push-prompt-input proc string)))
+                  ;; something is likely wrong ... fall through to manual handling
+                  (message "ovpn-mode: could not pull authinfo for: %s" (file-name-nondirectory conf))
+                  (ovpn-mode-push-prompt-input proc string)))
+            ;; do everything manual if no authinfo support enabled
+            (ovpn-mode-push-prompt-input proc string)))
 
          ;; handle link remote info
          ((string-match "link remote: \\(.*\\)" string)
