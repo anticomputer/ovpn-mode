@@ -55,7 +55,13 @@ This work was inspired by crasm's vpnshift.sh script (https://github.com/crasm/v
 
 ## privilege handling
 
-All sudo privilege handling happens through the emacs TRAMP layer. The initial versions of ovpn-mode include custom sudo handling, but this opened potential attack surface through ovpn server log tampering to match our sudo password prompt regex. Not in any directly exploitable way, but enough to make me completely remove any manual sudo privilege handling from the ovpn-mode code. So all privilege handling just occurs through "/sudo::/tmp" TRAMP paths and start-file-process now.
+All sudo privilege handling happens through the emacs TRAMP layer. The initial versions of ovpn-mode include custom sudo handling, but this opened potential attack surface through ovpn server log tampering to match our sudo password prompt regex. Not in any directly exploitable way, but enough to make me completely remove any manual sudo privilege handling from the ovpn-mode code. So all privilege handling just occurs through "/sudo::/tmp" TRAMP paths and start-file-process now
+
+## authinfo support
+
+Default OpenVPN user/pass prompts are supported for transparent authinfo integration for people that want to maintain OpenVPN credentials from their authinfo.gpg file. It expects an authinfo entry that looks like: `machine CONFIGN.OVPN login USER password PASS`
+
+There are two customizable variables that control this behavior. `ovpn-mode-authinfo-path` which is a string that is the path to your authinfo data (defaults to "~/.authinfo.gpg") and `ovpn-mode-check-authinfo` which is a boolean that toggles authinfo checking on/off (defaults to `t`).
 
 ## notes
 This is something I wrote to fit my exact use case (i.e. I like to be able to pop into and out of multiple openvpn configurations). It should work on any UNIX-like system that has sudo and openvpn available but I've only tested it on Linux.
