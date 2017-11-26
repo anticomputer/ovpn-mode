@@ -76,7 +76,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
       nil)))
 
 (defun ovpn-mode-clear-authinfo-cache ()
-  "Call this if you add new ovnp-mode authinfo data in a running emacs instance."
+  "Call this if you add new ovpn-mode authinfo data in a running emacs instance."
   (interactive)
   (setq netrc-cache nil))
 
@@ -561,7 +561,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
 
 (defun ovpn-mode-pull-configurations (dir)
   "pull .ovpn configs from directory DIR"
-  (setq ovpn-mode-configurations (directory-files dir t ".*\\.ovpn")))
+  (setq ovpn-mode-configurations (directory-files dir t ".*\\.ovpn$")))
 
 (defun ovpn-mode-link-status (status &optional clear)
   "Update the ovpn-mode current link status with STATUS"
