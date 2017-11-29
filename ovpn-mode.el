@@ -615,7 +615,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
   (when (process-live-p proc)
     (let* ((prompts
             ;; deal with openvpn auth and 2fa challenge response prompts as well
-            (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Response\\).*: *\\)\\|\\(^.*Enter Google Authenticator Code*\\)"
+            (format "\\(%s\\)\\|\\(^.*\\(Enter Auth Username\\|Enter Auth Password\\|Enter Private Key Password\\|Response\\).*: *\\)\\|\\(^.*Enter Google Authenticator Code*\\)"
                     tramp-password-prompt-regexp))
 
            ;; grab this here because we use it a bunch in our cond
@@ -638,7 +638,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
                      ((string-match-p "^.*Enter Auth Username.*: *" string)
                       (message "ovpn-mode: passing in authinfo based username")
                       (process-send-string proc (concat (nth 0 authinfo) "\n")))
-                     ((string-match-p "^.*Enter Auth Password.*: *" string)
+                     ((string-match-p "^.*\\(Enter Auth Password\\|Enter Private Key Password\\).*: *" string)
                       (message "ovpn-mode: passing in authinfo based password")
                       (process-send-string proc (concat (nth 1 authinfo) "\n")))
                      ;; play safe and fall through to manual for any unknown prompts
