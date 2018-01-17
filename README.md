@@ -1,7 +1,7 @@
 # ovpn-mode
 An openvpn management mode for Emacs24+ that lets you start|stop|restart openvpn configurations.
 
-![ovpn-mode screenshot](https://raw.githubusercontent.com/collarchoke/ovpn-mode/master/ovpn-mode.png "ovpn-mode")
+Screenshot: https://raw.githubusercontent.com/collarchoke/ovpn-mode/master/ovpn-mode.png
 
 You can see a demo of the UI in action at https://www.youtube.com/watch?v=48rqO9sR6Io
 
