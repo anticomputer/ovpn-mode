@@ -26,6 +26,7 @@ Additionally you have available:
 - `b`: switch to the output buffer for the selected ovpn
 - `e`: edit the selected ovpn
 - `d`: set the active vpn conf directory
+- `~`: apply a keyword filter to the current conf listing
 - `6`: toggle ipv6 support on/off (automatically called on start of ovpn)
 - `x`: execute an asynchronous shell command in the context of any associated namespace
 - `X`: spawn an xterm in the context of any associated namespace

@@ -50,6 +50,9 @@
   :type  'string
   :group 'ovpn)
 
+;; used for keyword filtering of .ovpn listings
+(defvar ovpn-mode-base-filter nil)
+
 (defcustom ovpn-mode-authinfo-path "~/.authinfo.gpg"
   "Path to authinfo data"
   :type 'string
@@ -128,6 +131,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
     (define-key map "b" 'ovpn-mode-buffer-vpn)
     (define-key map "e" 'ovpn-mode-edit-vpn)
     (define-key map "d" 'ovpn-mode-dir-set)
+    (define-key map "~" 'ovpn-mode-dir-filter)
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
     (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
@@ -559,9 +563,17 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
   (setq ovpn-mode-configurations nil)
   (ovpn))
 
-(defun ovpn-mode-pull-configurations (dir)
+(defun ovpn-mode-dir-filter (filter)
+  "keyword FILTER the current base listing and redisplay"
+  (interactive "sFilter: ")
+  (setq ovpn-mode-base-filter filter)
+  (setq ovpn-mode-configurations nil)
+  (ovpn))
+
+(defun ovpn-mode-pull-configurations (dir &optional filter)
   "pull .ovpn configs from directory DIR"
-  (setq ovpn-mode-configurations (directory-files dir t ".*\\.ovpn$")))
+  (let ((regex (if filter (format ".*%s.*\\.ovpn$" filter) ".*\\.ovpn$")))
+    (setq ovpn-mode-configurations (directory-files dir t regex))))
 
 (defun ovpn-mode-link-status (status &optional clear)
   "Update the ovpn-mode current link status with STATUS"
@@ -1066,9 +1078,16 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
 
      ;; pull configurations from the active directory base
      (t
-      (ovpn-mode-insert-line (format "Available configurations in %s:\n" ovpn-mode-base-directory))
+      (ovpn-mode-insert-line
+       (if ovpn-mode-base-filter
+           (format "Available configurations in %s with \"%s\":\n"
+                   ovpn-mode-base-directory
+                   ovpn-mode-base-filter)
+         (format "Available configurations in %s:\n"
+                 ovpn-mode-base-directory)))
       (cond ((file-exists-p ovpn-mode-base-directory)
-             (ovpn-mode-pull-configurations ovpn-mode-base-directory)
+             (ovpn-mode-pull-configurations ovpn-mode-base-directory ovpn-mode-base-filter)
+             (setq ovpn-mode-base-filter nil) ; reset filter to nil
              (mapc #'(lambda (config) (ovpn-mode-insert-line config)) ovpn-mode-configurations))
             (t
              (ovpn-mode-insert-line "Please set a valid base directory (d)")))))
