@@ -54,7 +54,7 @@
 (defvar ovpn-mode-base-filter nil)
 
 (defcustom ovpn-mode-authinfo-path "~/.authinfo.gpg"
-  "Path to authinfo data"
+  "Path to authinfo data."
   :type 'string
   :group 'ovpn)
 
@@ -67,8 +67,7 @@
 (defun ovpn-mode-pull-authinfo (config)
   "Return a LIST of user and password for a given config or NIL.
 
-Example authinfo entry: machine CONFIG.OVPN login USER password PASS
-"
+Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   (let* ((netrc (netrc-parse (expand-file-name ovpn-mode-authinfo-path)))
          (machine-entry (netrc-machine netrc config)))
     (if machine-entry
@@ -77,7 +76,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
       nil)))
 
 (defun ovpn-mode-clear-authinfo-cache ()
-  "Call this if you add new ovpn-mode authinfo data in a running emacs instance."
+  "Call this if you add new ovpn-mode authinfo data in a running Emacs instance."
   (interactive)
   (setq netrc-cache nil))
 
@@ -221,7 +220,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
   :group 'ovpn)
 
 (defun ovpn-mode-netns-linux-create ()
-  "Return a prop list containing an active namespace description"
+  "Return a prop list containing an active namespace description."
 
   ;; we only increment the base-id counter if we can't recycle an old id
   ;; current logic hard limits us to 256-10 concurrent namespaces in use
@@ -349,7 +348,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
     ))
 
 (defun ovpn-mode-netns-linux-delete-default-route (netns)
-  "Remove the default route for a given network namespace property list NETNS"
+  "Remove the default route for a given network namespace property list NETNS."
   (let* ((netns-buffer (plist-get netns :netns-buffer))
          (netns-range-default (plist-get netns :netns-range-default))
          (veth-vpn (plist-get netns :veth-vpn))
@@ -428,7 +427,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
 ;; ipv6 support
 
 (defun ovpn-mode-ipv6-linux-status ()
-  "message status of IPv6 support"
+  "Message status of IPv6 support."
   (let* ((sysctl (plist-get ovpn-mode-bin-paths :sysctl))
          (status_all
           (shell-command-to-string
@@ -451,7 +450,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
       t)))
 
 (defun ovpn-mode-ipv6-linux-toggle ()
-  "toggle ipv6 state (enabled/disabled)"
+  "Toggle ipv6 state (enabled/disabled)."
   (interactive)
   (let* ((on-or-off '((t . 1) (nil . 0))) ; t means current val is 0 ...
          (sysctl-arg (cdr (assoc (ovpn-mode-ipv6-linux-status) on-or-off))))
@@ -461,7 +460,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
       (ovpn-mode-ipv6-linux-sysctl-disable sysctl-arg))))
 
 (defun ovpn-mode-ipv6-linux-sysctl-disable (on-or-off)
-  "disable ipv6 support via sysctl to value of ON-OR-OFF"
+  "Disable ipv6 support via sysctl to value of ON-OR-OFF."
   (unless (ovpn-mode-sudo
            "ipv6-linux-sysctl-disable"
            ;;(get-buffer-create "*Messages*")
@@ -476,26 +475,26 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
 
 ;;; this lets you juggle multiple dirs of confs and maintain state between them
 (defun ovpn-mode-dir-set (dir)
-  "set new base DIR for ovpn confs and redisplay"
+  "Set new base DIR for ovpn confs and redisplay."
   (interactive "fPath to .ovpn configurations: ")
   (setq ovpn-mode-base-directory dir)
   (setq ovpn-mode-configurations nil)
   (ovpn))
 
 (defun ovpn-mode-dir-filter (filter)
-  "keyword FILTER the current base listing and redisplay"
+  "Keyword FILTER the current base listing and redisplay."
   (interactive "sFilter: ")
   (setq ovpn-mode-base-filter filter)
   (setq ovpn-mode-configurations nil)
   (ovpn))
 
 (defun ovpn-mode-pull-configurations (dir &optional filter)
-  "pull .ovpn configs from directory DIR"
+  "Pull .ovpn configs from directory DIR."
   (let ((regex (if filter (format ".*%s.*\\.ovpn$" filter) ".*\\.ovpn$")))
     (setq ovpn-mode-configurations (directory-files dir t regex))))
 
 (defun ovpn-mode-link-status (status &optional clear)
-  "Update the ovpn-mode current link status with STATUS"
+  "Update the ovpn-mode current link status with STATUS."
   (save-excursion
     (with-current-buffer ovpn-mode-buffer
       (setq buffer-read-only nil)
@@ -509,7 +508,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
         (ovpn-mode-insert-line (format "Last seen link status: %s" status) t)))))
 
 (defun ovpn-mode-insert-line (line &optional no-newline)
-  "insert a LINE into the main ovpn-mode interface buffer"
+  "Insert a LINE into the main ovpn-mode interface buffer."
   (with-current-buffer ovpn-mode-buffer
     (goto-char (point-max))
     (setq buffer-read-only nil)
@@ -677,12 +676,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
     (setq buffer-read-only t)))
 
 (defun ovpn-mode-start-vpn-with-namespace ()
-  "Sarts openvpn conf at point with namespace."
+  "Start openvpn conf at point with namespace."
   (interactive)
   (ovpn-mode-start-vpn t))
 
 (defun ovpn-mode-start-vpn (&optional with-namespace)
-  "Starts openvpn conf at point.
+  "Start openvpn conf at point.
 
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
@@ -768,7 +767,7 @@ This assumes any associated certificates live in the same directory as the conf.
 
 ;;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
-  "sends SIG to OVPN-PROCESS->process (sudo) child directly"
+  "Send SIG to OVPN-PROCESS -> process (sudo) child directly."
   (when ovpn-process
     (progn
       (let* ((process (struct-ovpn-process-process ovpn-process))
@@ -783,7 +782,7 @@ This assumes any associated certificates live in the same directory as the conf.
           (message "Target openvpn process no longer alive"))))))
 
 (defun ovpn-mode-stop-vpn ()
-  "stops openvpn conf through SIGTERM"
+  "Stop openvpn conf through SIGTERM."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map))
@@ -803,7 +802,7 @@ This assumes any associated certificates live in the same directory as the conf.
       )))
 
 (defun ovpn-mode-restart-vpn ()
-  "restarts openvpn conf through SIGHUP"
+  "Restart openvpn conf through SIGHUP."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map)))
@@ -812,7 +811,7 @@ This assumes any associated certificates live in the same directory as the conf.
       (ovpn-mode-signal-process 1 ovpn-process))))
 
 (defun ovpn-mode-info-vpn ()
-  "dumps info stats on selected ovpn conf"
+  "Dump info stats on selected ovpn conf."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map)))
@@ -829,7 +828,7 @@ This assumes any associated certificates live in the same directory as the conf.
                (message "%s: no info available" conf)))))))
 
 (defun ovpn-mode-buffer-vpn ()
-  "switches to the associated ovpn conf output buffer"
+  "Switch to the associated ovpn conf output buffer."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map)))
@@ -837,7 +836,7 @@ This assumes any associated certificates live in the same directory as the conf.
       (switch-to-buffer (struct-ovpn-process-buffer ovpn-process)))))
 
 (defun ovpn-mode-spawn-xterm-in-namespace (user)
-  "Executes an xterm inside of the selected namespace as the desired user"
+  "Execute an xterm inside of the selected namespace as the desired USER."
   (interactive "sSpawn xterm as (default current user): \n")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (user (if (equal user "") (user-real-login-name) user))
@@ -850,7 +849,7 @@ This assumes any associated certificates live in the same directory as the conf.
     (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
 
 (defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir torrent)
-  "Executes a headless screen rtorrent in selected namespace USER.
+  "Execute a headless screen rtorrent in selected namespace USER.
 Use `screen -list' to find and attach your desired namespaced rtorrent instance."
   (interactive "sSpawn rtorrent in screen as (default current user): \nfDownload directory: \nsTorrent URI (default no URI): ")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
@@ -904,7 +903,7 @@ Use `screen -list' to find and attach your desired namespaced rtorrent instance.
       (ovpn-mode-async-shell-command-in-namespace cmd user proc-name))))
 
 (defun ovpn-mode-async-shell-command-in-namespace (cmd user &optional proc-name)
-  "Executes CMD as USER in the conf associated namespace.
+  "Execute CMD as USER in the conf associated namespace.
 
 Please be very careful how you use this, as this is passed to the shell directly
 and with root privileges.
@@ -926,9 +925,7 @@ Thus something else would execute OUTSIDE the namespace, instead you'd want to d
 
 Which would expand into:
 
-sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethingelse\"
-
-"
+sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethingelse\""
   (interactive "sCmd: \nsUser (default current user): \n")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map))
@@ -954,19 +951,19 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
       (message "No associated namespace at point!"))))
 
 (defun ovpn-mode-edit-vpn ()
-  "opens the selected ovpn conf for editing"
+  "Open the selected ovpn conf for editing."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
     (when (string-match-p ".*\\.ovpn" conf)
       (find-file conf))))
 
 (defun ovpn-mode-active ()
-  "wrapper for the main entry that toggles the active mode"
+  "Wrapper for the main entry that toggles the active mode."
   (interactive)
   (ovpn t))
 
 (defun ovpn (&optional show-active)
-  "main entry point for ovpn-mode interface"
+  "Main entry point for ovpn-mode interface."
   (interactive)
   (cond ((not ovpn-mode-buffer)
          (setq ovpn-mode-buffer (get-buffer-create ovpn-mode-buffer-name))
