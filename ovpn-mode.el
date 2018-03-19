@@ -162,107 +162,28 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS
 ;; control buffer switch or kill behavior on stop
 (defvar ovpn-mode-switch-to-buffer-on-stop nil)
 
-(defvar ovpn-mode-search-path
-  "PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/opt/local/sbin:/opt/local/bin")
-
 ;; resolve full paths to binaries we use ... prevent CWD abuse
 (defvar ovpn-mode-bin-paths
   `(
-
     ;; build a plist with full paths to any binaries we may use, it's fine if
     ;; some of them don't exist (e.g. firewall-cmd), since then they won't be
     ;; used anyways ...
 
-    :sudo
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which sudo"
-                        ovpn-mode-search-path)))
-
-    :ip
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which ip"
-                        ovpn-mode-search-path)))
-
-    :firewall-cmd
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which firewall-cmd"
-                        ovpn-mode-search-path)))
-
-    :mkdir
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which mkdir"
-                        ovpn-mode-search-path)))
-
-    :echo
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which echo"
-                        ovpn-mode-search-path)))
-
-    :sysctl
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which sysctl"
-                        ovpn-mode-search-path)))
-
-    :iptables
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which iptables"
-                        ovpn-mode-search-path)))
-
-    :openvpn
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which openvpn"
-                        ovpn-mode-search-path)))
-
-    :kill
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which kill"
-                        ovpn-mode-search-path)))
-
-    :pgrep
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which pgrep"
-                        ovpn-mode-search-path)))
-
-    :xterm
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which xterm"
-                        ovpn-mode-search-path)))
-
-    :screen
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which screen"
-                        ovpn-mode-search-path)))
-
-    :rtorrent
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which rtorrent"
-                        ovpn-mode-search-path)))
-
-    :google-chrome
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which google-chrome"
-                        ovpn-mode-search-path)))
-
-    :rm
-    ,(replace-regexp-in-string
-      "\n$" "" (shell-command-to-string
-                (format "%s which rm"
-                        ovpn-mode-search-path)))
-
+    :echo          ,(executable-find "echo")
+    :firewall-cmd  ,(executable-find "firewall-cmd")
+    :google-chrome ,(executable-find "google-chrome")
+    :ip            ,(executable-find "ip")
+    :iptables      ,(executable-find "iptables")
+    :kill          ,(executable-find "kill")
+    :mkdir         ,(executable-find "mkdir")
+    :openvpn       ,(executable-find "openvpn")
+    :pgrep         ,(executable-find "pgrep")
+    :rm            ,(executable-find "rm")
+    :rtorrent      ,(executable-find "rtorrent")
+    :screen        ,(executable-find "screen")
+    :sudo          ,(executable-find "sudo")
+    :sysctl        ,(executable-find "sysctl")
+    :xterm         ,(executable-find "xterm")
     ))
 
 (defmacro ovpn-mode-sudo (name buffer &rest args)
@@ -789,10 +710,10 @@ This assumes any associated certificates live in the same directory as the conf.
               (when (and with-namespace (not netns))
                 (error "No namespace support on this platform!"))
 
-              ;; if you are using something else, ensure a "openvpn" binary exists in ovpn-mode-search-path, this may
+              ;; if you are using something else, ensure a "openvpn" binary exists in exec-path, this may
               ;; require a symlink e.g. for macports openvpn2 please symlink /opt/local/sbin/openvpn2 to /opt/local/sbin/openvpn
-              (when (string= openvpn "")
-                (error "No openvpn binary found in ovpn-mode-search-path"))
+              (unless openvpn
+                (error "No openvpn binary found in exec-path"))
 
               (with-current-buffer buffer
                 (cd (format "/sudo::%s" default-directory))
