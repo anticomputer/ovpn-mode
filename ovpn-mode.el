@@ -32,8 +32,8 @@
 ;;
 
 ;;; Code:
-(require 'cl)
-(require 'netrc)
+(require 'cl-lib)
+(require 'netrc)  ; authinfo handling
 
 (defgroup ovpn nil
   "An OpenVPN management mode for Emacs."
@@ -63,8 +63,6 @@
   :type 'boolean
   :group 'ovpn)
 
-;; authinfo handling
-(require 'netrc)
 
 (defun ovpn-mode-pull-authinfo (config)
   "Return a LIST of user and password for a given config or NIL.
