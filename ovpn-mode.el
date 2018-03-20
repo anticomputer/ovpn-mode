@@ -962,6 +962,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
   (interactive)
   (ovpn t))
 
+;;;###autoload
 (defun ovpn (&optional show-active)
   "Main entry point for ovpn-mode interface."
   (interactive)
