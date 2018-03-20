@@ -507,6 +507,9 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
       (unless clear
         (ovpn-mode-insert-line (format "Last seen link status: %s" status) t)))))
 
+(defvar ovpn-mode-process-map (make-hash-table :test 'equal))
+(cl-defstruct struct-ovpn-process buffer buffer-name process conf pid link-remote netns)
+
 (defun ovpn-mode-insert-line (line &optional no-newline)
   "Insert a LINE into the main ovpn-mode interface buffer."
   (with-current-buffer ovpn-mode-buffer
@@ -525,9 +528,6 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
              (ovpn-mode-highlight-conf line 'hi-red-b))
             ))
     (setq buffer-read-only t)))
-
-(defvar ovpn-mode-process-map (make-hash-table :test 'equal))
-(cl-defstruct struct-ovpn-process buffer buffer-name process conf pid link-remote netns)
 
 ;;; we use tramp's password prompt matcher
 (require 'tramp)
