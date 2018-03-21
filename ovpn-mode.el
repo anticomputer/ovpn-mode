@@ -198,8 +198,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 ;; only use this for safety critical commands
 (defun ovpn-mode-assert-shell-command (cmd)
   "Assert that a shell-command did not return error"
-  (assert (equal 0 (shell-command cmd)) t
-          (format "Error executing: %s" cmd)))
+  (cl-assert (equal 0 (shell-command cmd)) t
+             (format "Error executing: %s" cmd)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Linux specifics
 
