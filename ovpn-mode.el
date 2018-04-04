@@ -591,8 +591,11 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
             (when ovpn-process
               (setf (struct-ovpn-process-link-remote ovpn-process) link-remote)
               ;; update status first time we see link remote, or on ovpn buffer redraws
-              (ovpn-mode-link-status
-               (format "%s (%s)" link-remote (file-name-nondirectory conf))))))
+              ;; only do this when an active mode buffer exists re: autostarted confs
+              (when ovpn-mode-buffer
+                (ovpn-mode-link-status
+                 (format "%s (%s)" link-remote (file-name-nondirectory conf))))
+              )))
 
          ;; handle init complete
          ((string-match-p "Initialization Sequence Completed" string)
@@ -603,12 +606,15 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                 (funcall (struct-ovpn-mode-platform-specific-netns-delete-default-route
                           ovpn-mode-platform-specific) netns)
                 ;; namespace vpn highlight
-                (ovpn-mode-unhighlight-conf conf)
-                (ovpn-mode-highlight-conf conf 'hi-blue))
+                (when ovpn-mode-buffer
+                  (ovpn-mode-unhighlight-conf conf)
+                  (ovpn-mode-highlight-conf conf 'hi-blue))
+                )
             ;; global vpn highlight
             (progn
-              (ovpn-mode-unhighlight-conf conf)
-              (ovpn-mode-highlight-conf conf 'hi-green)))
+              (when ovpn-mode-buffer
+                (ovpn-mode-unhighlight-conf conf)
+                (ovpn-mode-highlight-conf conf 'hi-green))))
           (message "%s (re)initialized" (file-name-nondirectory conf)))
 
          ;; handle DNS options ... overwrite any default servers we're using
@@ -760,7 +766,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                     ;; green means 'regular vpn ready for use'
                     (message "Started %s, wait for init to complete (n: blue, s: green)"
                              (file-name-nondirectory conf))
-                    (ovpn-mode-highlight-conf conf 'hi-pink))
+                    (when ovpn-mode-buffer
+                      (ovpn-mode-highlight-conf conf 'hi-pink)))
                 ;; else
                 (message "Could not start openvpn for %s" (file-name-nondirectory conf)))))))
     ;; else
@@ -799,7 +806,8 @@ This assumes any associated certificates live in the same directory as the conf.
     (if ovpn-process
         (progn
           (ovpn-mode-signal-process 15 ovpn-process)
-          (ovpn-mode-unhighlight-conf conf)
+          (when ovpn-mode-buffer
+            (ovpn-mode-unhighlight-conf conf))
           ;; pull the hash table entry for this instance
           (remhash conf ovpn-mode-process-map)
           (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)
