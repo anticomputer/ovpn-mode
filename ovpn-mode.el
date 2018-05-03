@@ -213,12 +213,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (defvar ovpn-mode-netns-base 0)
 (defvar ovpn-mode-netns-free-base '()) ; :P
 
-(defcustom ovpn-mode-netns-ns0 "208.67.222.222"
+(defcustom ovpn-mode-netns-ns0 "1.0.0.1"
   "Default NS0 to use in ovpn-mode namespaces."
   :type  'string
   :group 'ovpn)
 
-(defcustom ovpn-mode-netns-ns1 "208.67.220.220"
+(defcustom ovpn-mode-netns-ns1 "1.1.1.1"
   "Default NS1 to use in ovpn-mode namespaces."
   :type  'string
   :group 'ovpn)
