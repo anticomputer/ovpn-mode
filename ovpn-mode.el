@@ -1,6 +1,6 @@
 ;;; ovpn-mode.el --- an openvpn management mode -*- lexical-binding: t; -*-
 
-;; ;; This is free and unencumbered software released into the public domain.
+;; This is free and unencumbered software released into the public domain.
 
 ;; Author: Bas Alberts <bas@anti.computer>
 ;; URL: https://github.com/anticomputer/ovpn-mode
