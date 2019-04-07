@@ -1,35 +1,52 @@
-;;; ovpn-mode.el --- an openvpn management mode for emacs  -*- lexical-binding: t; -*-
+;;; ovpn-mode.el --- an openvpn management mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015  Bas Alberts
+;; ;; This is free and unencumbered software released into the public domain.
 
 ;; Author: Bas Alberts <bas@anti.computer>
+;; URL: https://github.com/anticomputer/ovpn-mode
+
+;; Version: 0.1
+;; Package-Requires: ((emacs "24"))
+
 ;; Keywords: comm
-
-;; This program is free software; you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; Usage: M-x ovpn to enter main mode, M-x ovpn-mode-dir-set to switch to
-;; a new conf dir base.
+;; ovpn-mode expects configurations to be named with the name.ovpn convention
 ;;
-;; Note that ovpn-mode will maintain state, so you can switch between
-;; conf dir bases and it will display the correct states for any confs
-;; in use as you swap back and forth between conf listings
+;; M-x ovpn will pop you into the default configuration directory and list any
+;; existing .ovpn files from there. You can then interact with that listing with
+;; the following single key commands:
 ;;
-;; The only _hard_ requirement is that your openvpn configurations are
-;; named according to the bla.ovpn convention.
+;; s: start the selected ovpn
+;; n: start the selected ovpn in a dedicated namespace
+;; q: stop the selected ovpn
+;; r: restart the selected ovpn
 ;;
+;; There's a simple color coding scheme that tells you which state a given ovpn
+;; is in:
+;;
+;; red: ovpn has stopped/dropped/broken, use q to reset/purge, or b to debug
+;; pink: VPN is in the process of initializing
+;; blue: namespaced VPN is ready for use
+;; green: system wide VPN is ready for use
+;;
+;; Additionally you have available:
+;;
+;; i: remote link info for the selected ovpn
+;; b: switch to the output buffer for the selected ovpn
+;; e: edit the selected ovpn
+;; d: set the active vpn conf directory
+;; ~: apply a keyword filter to the current conf listing
+;; 6: toggle ipv6 support on/off (automatically called on start of ovpn)
+;; x: execute an asynchronous shell command in the context of any associated namespace
+;; X: spawn an xterm in the context of any associated namespace
+;; C: spawn a google-chrome instance in the context of any associated namespace
+;; a: show all active vpn configurations accross all conf directories
+;; h: describe mode
+;;
+;; ovpn-mode will maintain state for any running configurations, so you can
+;; switch between multiple directories and keep state accordingly.
 
 ;;; Code:
 (require 'cl-lib)
