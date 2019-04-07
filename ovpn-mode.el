@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2015  Bas Alberts
 
-;; Author: Bas Alberts <bas@mokusatsu.org>
+;; Author: Bas Alberts <bas@anti.computer>
 ;; Keywords: comm
 
 ;; This program is free software; you can redistribute it and/or modify
