@@ -498,7 +498,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 ;;; this lets you juggle multiple dirs of confs and maintain state between them
 (defun ovpn-mode-dir-set (dir)
   "Set new base DIR for ovpn confs and redisplay."
-  (interactive "fPath to .ovpn configurations: ")
+  (interactive "DPath to .ovpn configurations: ")
   (setq ovpn-mode-base-directory dir)
   (setq ovpn-mode-configurations nil)
   (ovpn))
