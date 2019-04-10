@@ -15,7 +15,7 @@
 ;; ovpn-mode expects configurations to be named with the name.ovpn convention
 ;;
 ;; M-x ovpn will pop you into the default configuration directory and list any
-;; existing .ovpn files from there. You can then interact with that listing with
+;; existing .ovpn files from there.  You can then interact with that listing with
 ;; the following single key commands:
 ;;
 ;; s: start the selected ovpn
@@ -207,18 +207,18 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     ))
 
 (defmacro ovpn-mode-sudo (name buffer &rest args)
-  "sudo exec a command ARGS with name PROC-NAME and output to BUFFER"
+  "Sudo exec a command ARGS as NAME and output to BUFFER."
   `(with-current-buffer ,buffer
      (cd "/sudo::/tmp")
      (let ((process (start-file-process ,name ,buffer ,@args)))
        (when (process-live-p process)
          (set-process-filter process
-                             #'(lambda (proc string)
+                             #'(lambda (_proc string)
                                  (mapc 'message (split-string string "\n"))))))))
 
 ;; only use this for safety critical commands
 (defun ovpn-mode-assert-shell-command (cmd)
-  "Assert that a shell-command did not return error"
+  "Assert that a 'shell-command' CMD did not return error."
   (cl-assert (equal 0 (shell-command cmd)) t
              (format "Error executing: %s" cmd)))
 
@@ -476,7 +476,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   (let* ((on-or-off '((t . 1) (nil . 0))) ; t means current val is 0 ...
          (sysctl-arg (cdr (assoc (ovpn-mode-ipv6-linux-status) on-or-off))))
     (when (or ovpn-mode-ipv6-auto-toggle
-              (y-or-n-p (format "ipv6 support is %s, toggle to %s?"
+              (y-or-n-p (format "IPv6 support is %s, toggle to %s? "
                                 (nth sysctl-arg '("off" "on")) ; :P
                                 (nth sysctl-arg '("on" "off")))))
       (ovpn-mode-ipv6-linux-sysctl-disable sysctl-arg))))
@@ -511,12 +511,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   (ovpn))
 
 (defun ovpn-mode-pull-configurations (dir &optional filter)
-  "Pull .ovpn configs from directory DIR."
+  "Pull .ovpn configs from directory DIR with an optional FILTER."
   (let ((regex (if filter (format ".*%s.*\\.ovpn$" filter) ".*\\.ovpn$")))
     (setq ovpn-mode-configurations (directory-files dir t regex))))
 
 (defun ovpn-mode-link-status (status &optional clear)
-  "Update the ovpn-mode current link status with STATUS."
+  "Update the ovpn-mode current link status with STATUS or CLEAR."
   (save-excursion
     (with-current-buffer ovpn-mode-buffer
       (setq buffer-read-only nil)
@@ -533,7 +533,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (cl-defstruct struct-ovpn-process buffer buffer-name process conf pid link-remote netns)
 
 (defun ovpn-mode-insert-line (line &optional no-newline)
-  "Insert a LINE into the main ovpn-mode interface buffer."
+  "Insert a LINE into the main ovpn-mode interface buffer optionally with NO-NEWLINE."
   (with-current-buffer ovpn-mode-buffer
     (goto-char (point-max))
     (setq buffer-read-only nil)
@@ -556,7 +556,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 
 ;; deal with any ovpn password prompts
 (defun ovpn-mode-push-prompt-input (proc prompt)
-  "Echo a control char stripped prompt to retrieve requested user input."
+  "Echo a control char stripped PROMPT to PROC to retrieve requested user input."
   (process-send-string
    proc
    (concat (read-passwd
@@ -704,12 +704,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (setq buffer-read-only t)))
 
 (defun ovpn-mode-start-vpn-with-namespace ()
-  "Start openvpn conf at point with namespace."
+  "Start ovpn at point with namespace."
   (interactive)
   (ovpn-mode-start-vpn t))
 
 (defun ovpn-mode-start-vpn-conf (conf &optional with-namespace)
-  "Start openvpn CONF."
+  "Start ovpn CONF optionally WITH-NAMESPACE."
   (interactive "fFull path to ovpn conf: ")
 
   ;; disable ipv6 (if so desired, and supported on the current platform)
@@ -791,7 +791,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (message "Already started %s (q to purge)" (file-name-nondirectory conf))))
 
 (defun ovpn-mode-start-vpn (&optional with-namespace)
-  "Start openvpn conf at point.
+  "Start ovpn conf at point optionally WITH-NAMESPACE.
 
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
@@ -806,7 +806,7 @@ This assumes any associated certificates live in the same directory as the conf.
     (progn
       (let* ((process (struct-ovpn-process-process ovpn-process))
              (buffer (struct-ovpn-process-buffer ovpn-process))
-             (buffer-name (struct-ovpn-process-buffer-name ovpn-process))
+             ;(buffer-name (struct-ovpn-process-buffer-name ovpn-process))
              (kill (plist-get ovpn-mode-bin-paths :kill)))
         (if (process-live-p process)
             (ovpn-mode-sudo
@@ -890,7 +890,7 @@ This assumes any associated certificates live in the same directory as the conf.
     (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
 
 (defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir torrent)
-  "Execute a headless screen rtorrent in selected namespace USER.
+  "Execute a headless screen rtorrent for TORRENT in DIR as USER.
 Use `screen -list' to find and attach your desired namespaced rtorrent instance."
   (interactive "sSpawn rtorrent in screen as (default current user): \nfDownload directory: \nsTorrent URI (default no URI): ")
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
@@ -920,7 +920,7 @@ Use `screen -list' to find and attach your desired namespaced rtorrent instance.
 (defvar ovpn-mode-chrome-data-dir-base "/dev/shm")
 
 (defun ovpn-mode-spawn-chrome-in-namespace ()
-  "Executes an incognito session of chrome with a namespace dedicated user-data-dir"
+  "Execute an incognito session of chrome with a namespace dedicated user-data-dir."
   (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
          (ovpn-process (gethash conf ovpn-mode-process-map))
@@ -944,7 +944,7 @@ Use `screen -list' to find and attach your desired namespaced rtorrent instance.
       (ovpn-mode-async-shell-command-in-namespace cmd user proc-name))))
 
 (defun ovpn-mode-async-shell-command-in-namespace (cmd user &optional proc-name)
-  "Execute CMD as USER in the conf associated namespace.
+  "Run CMD (optionally as PROC-NAME) as USER in the conf associated namespace.
 
 Please be very careful how you use this, as this is passed to the shell directly
 and with root privileges.
@@ -1005,7 +1005,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
 
 ;;;###autoload
 (defun ovpn (&optional show-active)
-  "Main entry point for ovpn-mode interface."
+  "Main entry point for ovpn-mode interface optionally filters on SHOW-ACTIVE."
   (interactive)
   (cond ((not ovpn-mode-buffer)
          (setq ovpn-mode-buffer (get-buffer-create ovpn-mode-buffer-name))
@@ -1030,7 +1030,7 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
      ;; dump any active configurations, regardless of directory base
      (show-active
       (ovpn-mode-insert-line "Active openvpn configurations:\n")
-      (maphash #'(lambda (key value)
+      (maphash #'(lambda (key _value)
                    ;; our hash map contains process objects and conf name strings
                    (when (stringp key) (ovpn-mode-insert-line key))) ovpn-mode-process-map))
 
