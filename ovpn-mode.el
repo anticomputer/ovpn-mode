@@ -97,7 +97,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
       nil)))
 
 (defun ovpn-mode-clear-authinfo-cache ()
-  "Call this if you add new ovpn-mode authinfo data in a running Emacs instance."
+  "Call this if you add new `ovpn-mode' authinfo data in a running Emacs instance."
   (interactive)
   (setq netrc-cache nil))
 
@@ -160,7 +160,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                          ovpn-mode-platform-specific))
     (define-key map "h" 'describe-mode)
     map)
-  "The keyboard map for ovpn-mode.")
+  "The keyboard map for `ovpn-mode'.")
 
 (define-derived-mode ovpn-mode special-mode
   "ovpn-mode"
@@ -231,12 +231,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (defvar ovpn-mode-netns-free-base '()) ; :P
 
 (defcustom ovpn-mode-netns-ns0 "1.0.0.1"
-  "Default NS0 to use in ovpn-mode namespaces."
+  "Default NS0 to use in `ovpn-mode' namespaces."
   :type  'string
   :group 'ovpn)
 
 (defcustom ovpn-mode-netns-ns1 "1.1.1.1"
-  "Default NS1 to use in ovpn-mode namespaces."
+  "Default NS1 to use in `ovpn-mode' namespaces."
   :type  'string
   :group 'ovpn)
 
@@ -516,7 +516,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (setq ovpn-mode-configurations (directory-files dir t regex))))
 
 (defun ovpn-mode-link-status (status &optional clear)
-  "Update the ovpn-mode current link status with STATUS or CLEAR."
+  "Update the `ovpn-mode' current link status with STATUS or CLEAR."
   (save-excursion
     (with-current-buffer ovpn-mode-buffer
       (setq buffer-read-only nil)
@@ -533,7 +533,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (cl-defstruct struct-ovpn-process buffer buffer-name process conf pid link-remote netns)
 
 (defun ovpn-mode-insert-line (line &optional no-newline)
-  "Insert a LINE into the main ovpn-mode interface buffer optionally with NO-NEWLINE."
+  "Insert a LINE into the main `ovpn-mode' interface buffer optionally with NO-NEWLINE."
   (with-current-buffer ovpn-mode-buffer
     (goto-char (point-max))
     (setq buffer-read-only nil)
@@ -564,6 +564,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
            "\n")))
 
 (defun ovpn-process-filter (proc string)
+  "Process filter for PROC which receives process output STRING."
   (when (process-live-p proc)
     (let* ((prompts
             ;; deal with openvpn auth and 2fa challenge response prompts as well
@@ -659,6 +660,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
         (princ (format "%s" string) (process-buffer proc))))))
 
 (defun ovpn-process-sentinel (proc string)
+  "Process sentinel for PROC which receives input STRING."
   (let* ((ovpn-process (gethash proc ovpn-mode-process-map))
          (conf nil))
     (cond
@@ -689,15 +691,18 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     ))
 
 (defun ovpn-mode-purge-process-map ()
+  "Clear the process hash table."
   (setq ovpn-mode-process-map (make-hash-table :test 'equal)))
 
 (defun ovpn-mode-highlight-conf (conf face)
+  "Highlight lines matching CONF with FACE."
   (with-current-buffer ovpn-mode-buffer
     (setq buffer-read-only nil)
     (highlight-regexp conf face)
     (setq buffer-read-only t)))
 
 (defun ovpn-mode-unhighlight-conf (conf)
+  "Remove highlight from lines matching CONF."
   (with-current-buffer ovpn-mode-buffer
     (setq buffer-read-only nil)
     (unhighlight-regexp conf)
@@ -999,13 +1004,13 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
       (find-file conf))))
 
 (defun ovpn-mode-active ()
-  "Wrapper for the main entry that toggles the active mode."
+  "Wrapper for the main entry that enters the only-active display mode."
   (interactive)
   (ovpn t))
 
 ;;;###autoload
 (defun ovpn (&optional show-active)
-  "Main entry point for ovpn-mode interface optionally filters on SHOW-ACTIVE."
+  "Main entry point for `ovpn-mode' interface optionally filters on SHOW-ACTIVE."
   (interactive)
   (cond ((not ovpn-mode-buffer)
          (setq ovpn-mode-buffer (get-buffer-create ovpn-mode-buffer-name))
