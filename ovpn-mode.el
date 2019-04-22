@@ -6,7 +6,7 @@
 ;; URL: https://github.com/anticomputer/ovpn-mode
 
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24"))
+;; Package-Requires: ((emacs "24") (cl-lib "0.5"))
 
 ;; Keywords: comm
 
@@ -77,6 +77,11 @@
 
 (defcustom ovpn-mode-check-authinfo t
   "Check authinfo for configname.ovpn associated user:pass data."
+  :type 'boolean
+  :group 'ovpn)
+
+(defcustom ovpn-mode-power-user nil
+  "Enables potentially dangerous interactive privileged shell use."
   :type 'boolean
   :group 'ovpn)
 
@@ -151,7 +156,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (define-key map "d" 'ovpn-mode-dir-set)
     (define-key map "~" 'ovpn-mode-dir-filter)
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
-    (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace)
+    (when ovpn-mode-power-user
+      (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace))
     (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
     (define-key map "R" 'ovpn-mode-spawn-rtorrent-screen-in-namespace)
     (define-key map "C" 'ovpn-mode-spawn-chrome-in-namespace)
@@ -165,11 +171,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (define-derived-mode ovpn-mode special-mode
   "ovpn-mode"
   "Management mode for interacting with openvpn configurations"
-  (setq font-lock-defaults '((ovpn-mode-font-lock-keywords)))
-  (use-local-map (copy-keymap ovpn-mode-map))
-  ;; define-derive-mode automatically installs ovpn-mode-hook
-  ;; to run through run-mode-hooks as the last thing it does
-  )
+  (setq font-lock-defaults '((ovpn-mode-font-lock-keywords))))
 
 (setq ovpn-mode-keywords nil)
 (setq ovpn-mode-keywords-regexp nil)
@@ -519,13 +521,12 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   "Update the `ovpn-mode' current link status with STATUS or CLEAR."
   (save-excursion
     (with-current-buffer ovpn-mode-buffer
-      (setq buffer-read-only nil)
-      (goto-char (point-max))
-      ;; delete any existing status line
-      (delete-region
-       (progn (forward-visible-line 0) (point))
-       (progn (forward-visible-line 1) (point)))
-      (setq buffer-read-only t)
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        ;; delete any existing status line
+        (delete-region
+         (progn (forward-visible-line 0) (point))
+         (progn (forward-visible-line 1) (point))))
       (unless clear
         (ovpn-mode-insert-line (format "Last seen link status: %s" status) t)))))
 
@@ -536,20 +537,19 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   "Insert a LINE into the main `ovpn-mode' interface buffer optionally with NO-NEWLINE."
   (with-current-buffer ovpn-mode-buffer
     (goto-char (point-max))
-    (setq buffer-read-only nil)
-    (let ((fmt (if no-newline "%s" "%s\n")))
-      (insert (format fmt line)))
-    (let* ((ovpn-process (gethash line ovpn-mode-process-map)))
-      (cond ((and ovpn-process (process-live-p (struct-ovpn-process-process ovpn-process)))
-             ;; highlight blue if we're running inside of a namespace
-             (if (struct-ovpn-process-netns ovpn-process)
-                 (ovpn-mode-highlight-conf line 'hi-blue)
-               (ovpn-mode-highlight-conf line 'hi-green)))
-            ;; if it's in the list but the process is dead, it's waiting for purging by q
-            (ovpn-process
-             (ovpn-mode-highlight-conf line 'hi-red-b))
-            ))
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t))
+      (let ((fmt (if no-newline "%s" "%s\n")))
+        (insert (format fmt line)))
+      (let* ((ovpn-process (gethash line ovpn-mode-process-map)))
+        (cond ((and ovpn-process (process-live-p (struct-ovpn-process-process ovpn-process)))
+               ;; highlight blue if we're running inside of a namespace
+               (if (struct-ovpn-process-netns ovpn-process)
+                   (ovpn-mode-highlight-conf line 'hi-blue)
+                 (ovpn-mode-highlight-conf line 'hi-green)))
+              ;; if it's in the list but the process is dead, it's waiting for purging by q
+              (ovpn-process
+               (ovpn-mode-highlight-conf line 'hi-red-b))
+              )))))
 
 ;;; we use tramp's password prompt matcher
 (require 'tramp)
@@ -697,16 +697,14 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (defun ovpn-mode-highlight-conf (conf face)
   "Highlight lines matching CONF with FACE."
   (with-current-buffer ovpn-mode-buffer
-    (setq buffer-read-only nil)
-    (highlight-regexp conf face)
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t))
+      (highlight-regexp conf face))))
 
 (defun ovpn-mode-unhighlight-conf (conf)
   "Remove highlight from lines matching CONF."
   (with-current-buffer ovpn-mode-buffer
-    (setq buffer-read-only nil)
-    (unhighlight-regexp conf)
-    (setq buffer-read-only t)))
+    (let ((inhibit-read-only t))
+      (unhighlight-regexp conf))))
 
 (defun ovpn-mode-start-vpn-with-namespace ()
   "Start ovpn at point with namespace."
@@ -721,79 +719,80 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
   (when (funcall (struct-ovpn-mode-platform-specific-ipv6-status ovpn-mode-platform-specific))
     (funcall (struct-ovpn-mode-platform-specific-ipv6-toggle ovpn-mode-platform-specific)))
 
-  (if (not (gethash conf ovpn-mode-process-map))
-      (progn
-        (let* ((default-directory (file-name-directory conf))
-               (buffer-name (file-name-nondirectory conf))
-               (buffer (generate-new-buffer buffer-name))
-               ;; init a namespace if needed (and supported on platform)
-               (netns (if with-namespace
-                          (funcall (struct-ovpn-mode-platform-specific-netns-create
-                                    ovpn-mode-platform-specific))
-                        nil))
-               ;; bin paths
-               (ip (plist-get ovpn-mode-bin-paths :ip))
-               (openvpn (plist-get ovpn-mode-bin-paths :openvpn)))
+  (unless (not (gethash conf ovpn-mode-process-map))
+    (error "Already started %s (q to purge)" (file-name-nondirectory conf)))
 
-          (when (and with-namespace (not netns))
-            (error "No namespace support on this platform!"))
+  (let* ((default-directory (file-name-directory conf))
+         (buffer-name (file-name-nondirectory conf))
+         (buffer (generate-new-buffer buffer-name))
+         ;; init a namespace if needed (and supported on platform)
+         (netns (if with-namespace
+                    (funcall (struct-ovpn-mode-platform-specific-netns-create
+                              ovpn-mode-platform-specific))
+                  nil))
+         ;; bin paths
+         (ip (plist-get ovpn-mode-bin-paths :ip))
+         (openvpn (plist-get ovpn-mode-bin-paths :openvpn)))
 
-          ;; if you are using something else, ensure a "openvpn" binary exists in exec-path, this may
-          ;; require a symlink e.g. for macports openvpn2 please symlink /opt/local/sbin/openvpn2 to /opt/local/sbin/openvpn
-          (unless openvpn
-            (error "No openvpn binary found in exec-path"))
+    (when (and with-namespace (not netns))
+      (error "No namespace support on this platform!"))
 
-          (with-current-buffer buffer
-            (cd (format "/sudo::%s" default-directory))
-            (let ((process (apply 'start-file-process
-                                  buffer-name
-                                  buffer
-                                  (if (and with-namespace netns)
-                                      ;; set up an openvpn instance for conf inside a given namespace
-                                      (progn
-                                        (message "Starting %s with namespace %s"
-                                                 (file-name-nondirectory conf)
-                                                 (plist-get netns :netns))
-                                        (list ip
-                                              "netns" "exec"
-                                              (format "%s" (plist-get netns :netns))
-                                              openvpn
-                                              ;; be explicitly verbose to the max default range
-                                              "--verb" "4"
-                                              "--cd" (file-name-directory conf)
-                                              "--config" conf
-                                              "--dev" (plist-get netns :netns-tunvpn)))
-                                    ;; just start normally for the main system route
-                                    (list openvpn
-                                          "--verb" "4"
-                                          "--cd" (file-name-directory conf)
-                                          "--config" conf)))))
-              (if (process-live-p process)
-                  (progn
-                    (set-process-filter process 'ovpn-process-filter)
-                    (set-process-sentinel process 'ovpn-process-sentinel)
-                    ;; throw the process struct into the lookup maps
-                    (let ((ovpn-process (make-struct-ovpn-process
-                                         :buffer buffer
-                                         :buffer-name buffer-name
-                                         :process process
-                                         :conf conf
-                                         :netns netns)))
-                      ;; so we can look up by both conf name as well as process
-                      (puthash conf ovpn-process ovpn-mode-process-map)
-                      (puthash process ovpn-process ovpn-mode-process-map))
-                    ;; highlight to the starting state color
-                    ;; pink means 'initializing'
-                    ;; blue means 'namespace vpn ready for use'
-                    ;; green means 'regular vpn ready for use'
-                    (message "Started %s, wait for init to complete (n: blue, s: green)"
-                             (file-name-nondirectory conf))
-                    (when ovpn-mode-buffer
-                      (ovpn-mode-highlight-conf conf 'hi-pink)))
-                ;; else
-                (message "Could not start openvpn for %s" (file-name-nondirectory conf)))))))
-    ;; else
-    (message "Already started %s (q to purge)" (file-name-nondirectory conf))))
+    ;; if you are using something else, ensure a "openvpn" binary exists in exec-path, this may
+    ;; require a symlink e.g. for macports openvpn2 please symlink /opt/local/sbin/openvpn2 to /opt/local/sbin/openvpn
+    (unless openvpn
+      (error "No openvpn binary found in exec-path"))
+
+    (with-current-buffer buffer
+      (cd (format "/sudo::%s" default-directory))
+      (let ((process (apply 'start-file-process
+                            buffer-name
+                            buffer
+                            (if (and with-namespace netns)
+                                ;; set up an openvpn instance for conf inside a given namespace
+                                (progn
+                                  (message "Starting %s with namespace %s"
+                                           (file-name-nondirectory conf)
+                                           (plist-get netns :netns))
+                                  (list ip
+                                        "netns" "exec"
+                                        (format "%s" (plist-get netns :netns))
+                                        openvpn
+                                        ;; be explicitly verbose to the max default range
+                                        "--verb" "4"
+                                        "--cd" (file-name-directory conf)
+                                        "--config" conf
+                                        "--dev" (plist-get netns :netns-tunvpn)))
+                              ;; just start normally for the main system route
+                              (list openvpn
+                                    "--verb" "4"
+                                    "--cd" (file-name-directory conf)
+                                    "--config" conf)))))
+
+        (unless (process-live-p process)
+          (error "Could not start openvpn for %s" (file-name-nondirectory conf)))
+
+        (set-process-filter process 'ovpn-process-filter)
+        (set-process-sentinel process 'ovpn-process-sentinel)
+
+        ;; throw the process struct into the lookup maps
+        (let ((ovpn-process (make-struct-ovpn-process
+                             :buffer buffer
+                             :buffer-name buffer-name
+                             :process process
+                             :conf conf
+                             :netns netns)))
+          ;; so we can look up by both conf name as well as process
+          (puthash conf ovpn-process ovpn-mode-process-map)
+          (puthash process ovpn-process ovpn-mode-process-map))
+
+        ;; highlight to the starting state color
+        ;; pink means 'initializing'
+        ;; blue means 'namespace vpn ready for use'
+        ;; green means 'regular vpn ready for use'
+        (message "Started %s, wait for init to complete (n: blue, s: green)"
+                 (file-name-nondirectory conf))
+        (when ovpn-mode-buffer
+          (ovpn-mode-highlight-conf conf 'hi-pink))))))
 
 (defun ovpn-mode-start-vpn (&optional with-namespace)
   "Start ovpn conf at point optionally WITH-NAMESPACE.
@@ -825,21 +824,22 @@ This assumes any associated certificates live in the same directory as the conf.
   (interactive "fFull path to ovpn conf: ")
   (let* ((ovpn-process (gethash conf ovpn-mode-process-map))
          (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil)))
-    (if ovpn-process
-        (progn
-          (ovpn-mode-signal-process 15 ovpn-process)
-          (when ovpn-mode-buffer
-            (ovpn-mode-unhighlight-conf conf))
-          ;; pull the hash table entry for this instance
-          (remhash conf ovpn-mode-process-map)
-          (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)
-          ;; clear the status line from the mode buffer
-          (ovpn-mode-link-status nil t)
-          ;; clear out any associated namespace if needed
-          (when netns
-            (funcall (struct-ovpn-mode-platform-specific-netns-delete
-                      ovpn-mode-platform-specific) netns)))
-      (message "No active openvpn process found for %s" conf))))
+
+    (unless ovpn-process
+      (error "No active openvpn process found for %s" conf))
+
+    (ovpn-mode-signal-process 15 ovpn-process)
+    (when ovpn-mode-buffer
+      (ovpn-mode-unhighlight-conf conf))
+    ;; pull the hash table entry for this instance
+    (remhash conf ovpn-mode-process-map)
+    (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)
+    ;; clear the status line from the mode buffer
+    (ovpn-mode-link-status nil t)
+    ;; clear out any associated namespace if needed
+    (when netns
+      (funcall (struct-ovpn-mode-platform-specific-netns-delete
+                ovpn-mode-platform-specific) netns))))
 
 (defun ovpn-mode-stop-vpn ()
   "Stop openvpn conf at point through SIGTERM."
@@ -977,24 +977,27 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
          (ovpn-process (gethash conf ovpn-mode-process-map))
          (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
          (user (if (equal user "") (user-real-login-name) user)))
-    (if netns
-        (progn
-          (message "Attempting to execute \"%s\" in namespace %s as user %s"
-                   cmd
-                   (plist-get netns :netns)
-                   user)
-          ;; you can do stuff like xterm -e "sudo -u targetuser bash" here
-          ;; to deal with e.g. X server annoyances (as user root obviously)
-          (ovpn-mode-sudo
-           (or proc-name "ovpn-mode-sudo-exec")
-           (plist-get netns :netns-buffer)
-           "/bin/sh" "-c"
-           (format "ip netns exec %s %s -u %s %s"
-                   (plist-get netns :netns)
-                   (plist-get ovpn-mode-bin-paths :sudo)
-                   user
-                   cmd)))
-      (message "No associated namespace at point!"))))
+
+    (unless netns
+      (error "%s" "No associated namespace at point"))
+
+    (message "Attempting to execute \"%s\" in namespace %s as user %s"
+             cmd
+             (plist-get netns :netns)
+             user)
+
+    ;; you can do stuff like xterm -e "sudo -u targetuser bash" here
+    ;; to deal with e.g. X server annoyances (as user root obviously)
+
+    (ovpn-mode-sudo
+     (or proc-name "ovpn-mode-sudo-exec")
+     (plist-get netns :netns-buffer)
+     "/bin/sh" "-c"
+     (format "ip netns exec %s %s -u %s %s"
+             (plist-get netns :netns)
+             (plist-get ovpn-mode-bin-paths :sudo)
+             user
+             cmd))))
 
 (defun ovpn-mode-edit-vpn ()
   "Open the selected ovpn conf for editing."
@@ -1014,6 +1017,12 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
   (interactive)
   (cond ((not ovpn-mode-buffer)
          (setq ovpn-mode-buffer (get-buffer-create ovpn-mode-buffer-name))
+         (with-current-buffer ovpn-mode-buffer
+           ;; initialize to read only, lift inhibit-read-only to t where needed
+           (setq buffer-read-only t)
+           ;; set a local kill-buffer-hook to reset our configurations and buffer
+           (add-hook 'kill-buffer-hook '(lambda () (setq ovpn-mode-configurations nil
+                                                    ovpn-mode-buffer nil)) nil t))
          (switch-to-buffer ovpn-mode-buffer)
          (ovpn-mode))
         (t
@@ -1024,9 +1033,8 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
     ;; a redisplay ... ovpn-mode-insert-line will check for any active processes
     ;; associated with a displayed config and highlight accordingly
     (with-current-buffer ovpn-mode-buffer
-      (setq buffer-read-only nil)
-      (erase-buffer)
-      (setq buffer-read-only t))
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
     (ovpn-mode-insert-line
      "s start, n start with namespace, r restart, q stop/purge\n\n")
 
@@ -1065,12 +1073,6 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
         (when link-remote
           (ovpn-mode-link-status (format "%s (%s)" link-remote (file-name-nondirectory conf))))))
     (goto-char (point-min))))
-
-;; reset default port and process var on buffer kill
-(add-hook 'kill-buffer-hook '(lambda ()
-                               (when (string= (buffer-name) ovpn-mode-buffer-name)
-                                 (setq ovpn-mode-configurations nil
-                                       ovpn-mode-buffer nil))))
 
 (provide 'ovpn-mode)
 ;;; ovpn-mode.el ends here

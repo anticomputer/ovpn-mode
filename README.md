@@ -26,11 +26,18 @@ Additionally you have available:
 - `d`: set the active vpn conf directory
 - `~`: apply a keyword filter to the current conf listing
 - `6`: toggle ipv6 support on/off (automatically called on start of ovpn)
-- `x`: execute an asynchronous shell command in the context of any associated namespace
 - `X`: spawn an xterm in the context of any associated namespace
 - `C`: spawn a google-chrome instance with a dedicated data directory in the context of any associated namespace
 - `a`: show all active vpn configurations accross all conf directories
 - `h`: describe mode
+
+For power users there is a customize option `ovpn-mode-power-user` that will also enable:
+
+- `x`: execute an asynchronous shell command in the context of any associated namespace
+
+Pleae note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided xterm spawner to get safe command execution in a namespace context.
+
+Managing multiple directory states:
 
 `M-x ovpn-mode-dir-set` lets you point ovpn-mode at any additional directories. ovpn-mode will maintain state for any running configurations, so you can switch between multiple directories and keep state accordingly. This is what `d` is bound to. If you're juggling lots of directories, `a` lets you switch to a view that shows all active ovpn configurations.
 
