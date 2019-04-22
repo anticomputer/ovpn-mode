@@ -881,16 +881,16 @@ This assumes any associated certificates live in the same directory as the conf.
     (when ovpn-process
       (switch-to-buffer (struct-ovpn-process-buffer ovpn-process)))))
 
-(defun ovpn-mode-spawn-xterm-in-namespace (user)
-  "Execute an xterm inside of the selected namespace as the desired USER."
-  (interactive "sSpawn xterm as (default current user): \n")
+(defun ovpn-mode-spawn-xterm-in-namespace ()
+  "Execute an xterm inside of the selected namespace."
+  (interactive)
   (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (user (if (equal user "") (user-real-login-name) user))
-         (proc-name (format "xterm-%s-%s" user (file-name-nondirectory conf)))
+         (proc-name (format "xterm-%s" (file-name-nondirectory conf)))
          (cmd (format "%s -e \"%s -u %s PS1=\\\"%s> \\\" /bin/sh\""
                       (plist-get ovpn-mode-bin-paths :xterm)
                       (plist-get ovpn-mode-bin-paths :sudo)
-                      user (file-name-nondirectory conf))))
+                      (user-real-login-name)
+                      (file-name-nondirectory conf))))
     ;; we exec this as root because of the priv drop that occurs on the -e
     (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
 
