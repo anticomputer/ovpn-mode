@@ -35,7 +35,7 @@ For power users there is a customize option `ovpn-mode-power-user` that will als
 
 - `x`: execute an asynchronous shell command in the context of any associated namespace
 
-Pleae note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided xterm spawner to get safe command execution in a namespace context.
+Please note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided xterm spawner to get safe command execution in a namespace context.
 
 Managing multiple directory states:
 
