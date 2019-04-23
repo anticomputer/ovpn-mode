@@ -1,3 +1,5 @@
+[![MELPA](https://melpa.org/packages/ovpn-mode-badge.svg)](https://melpa.org/#/ovpn-mode)
+
 # ovpn-mode
 An openvpn management mode for Emacs24+ that lets you start|stop|restart openvpn configurations.
 
