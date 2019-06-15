@@ -639,7 +639,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
          ;; we _could_ also dump a proper update-resolv-conf script into our
          ;; namespace dir, pass that to openvpn via --up and handle updating
          ;; the NS like that, but this is nicely self-contained
-         ((string-match "PUSH_REPLY.*dhcp-option DNS \\(\\([0-9]+.\\)+[0-9]+\\)" string)
+         ((string-match "PUSH_REPLY.*dhcp-option DNS \\(\\([0-9]+\\.\\)+[0-9]+\\)" string)
           (if netns
               (let ((dns (match-string 1 string))
                     (netns-buffer (plist-get netns :netns-buffer))
