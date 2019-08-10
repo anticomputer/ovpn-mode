@@ -28,8 +28,8 @@ Additionally you have available:
 - `d`: set the active vpn conf directory
 - `~`: apply a keyword filter to the current conf listing
 - `6`: toggle ipv6 support on/off (automatically called on start of ovpn)
-- `X`: spawn an xterm in the context of any associated namespace
-- `C`: spawn a google-chrome instance with a dedicated data directory in the context of any associated namespace
+- `T`: spawn a terminal in the context of any associated namespace
+- `B`: spawn a browser in the context of any associated namespace
 - `a`: show all active vpn configurations accross all conf directories
 - `h`: describe mode
 
@@ -37,7 +37,7 @@ For power users there is a customize option `ovpn-mode-power-user` that will als
 
 - `x`: execute an asynchronous shell command in the context of any associated namespace
 
-Please note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided xterm spawner to get safe command execution in a namespace context.
+Please note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided terminal spawner to get safe command execution in a namespace context.
 
 Managing multiple directory states:
 
@@ -45,11 +45,11 @@ Managing multiple directory states:
 
 ## namespace integration
 
-This is currently in beta. By starting a configuration with `n` as opposed to `s` you will set up a dedicated network namespace for the openvpn instance to run inside of. Once this namespace is initialized, you can then use `x` to execute commands as a specified user from within that namespace. You can do this for multiple concurrent vpn connections, without affecting your existing main networking routes. I've had as many as 20 concurrent namespaced ovpn configurations running, without any issues.
+By starting a configuration with `n` as opposed to `s` you will set up a dedicated network namespace for the openvpn instance to run inside of. Once this namespace is initialized, you can then use `x` to execute commands as a specified user from within that namespace. You can do this for multiple concurrent vpn connections, without affecting your existing main networking routes. I've had as many as 20 concurrent namespaced ovpn configurations running, without any issues.
 
 This is convenient to e.g. isolate a specific process to a certain vpn without having to do a bunch of routing. Personally I just spawn an xterm from a namespace and then do whatever I want for that specific vpn instance from that xterm (e.g. start rtorrent, an incognito browser session, etc.)
 
-Convenience commands are `X` to spawn an xterm inside the namespace as a specified user, and `C` to spawn an incognito Google Chrome session with some minor lock-down configurations enabled (e.g. --user-data-dir set to a temporary /dev/shm directory, plugins disabled, client side phishing callbacks disabled, etc.).
+Convenience commands are `T` to spawn a terminal inside the namespace as a specified user, and `B` to spawn a browser (by default an incognito Google Chrome session with some minor lock-down configurations enabled e.g. --user-data-dir set to a temporary /dev/shm directory, plugins disabled, client side phishing callbacks disabled, etc.).
 
 As mentioned previously `x` allows you to manually run commands inside of a selected namespaced ovpn, but please read `C-h f ovpn-mode-async-shell-command RET` before you do, for some notes on secure use. It's easy to shoot yourself in the foot here by flawed shell escapes that will lead to execution outside the context of the network namespace.  
 
@@ -63,7 +63,7 @@ This work was inspired by crasm's vpnshift.sh script (https://github.com/crasm/v
 
 ## privilege handling
 
-All sudo privilege handling happens through the emacs TRAMP layer. The initial versions of ovpn-mode include custom sudo handling, but this opened potential attack surface through ovpn server log tampering to match our sudo password prompt regex. Not in any directly exploitable way, but enough to make me completely remove any manual sudo privilege handling from the ovpn-mode code. So all privilege handling just occurs through "/sudo::/tmp" TRAMP paths and start-file-process now
+All sudo privilege handling happens through the emacs TRAMP layer. The initial versions of ovpn-mode include custom sudo handling, but this opened potential attack surface through ovpn server log tampering to match our sudo password prompt regex. Not in any directly exploitable way, but enough to make me completely remove any manual sudo privilege handling from the ovpn-mode code. So all privilege handling just occurs through "/sudo::/tmp" TRAMP paths and start-file-process now.
 
 ## authinfo support
 

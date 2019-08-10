@@ -6,7 +6,7 @@
 ;; URL: https://github.com/anticomputer/ovpn-mode
 
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24") (cl-lib "0.5"))
+;; Package-Requires: ((emacs "25") (cl-lib "0.5"))
 
 ;; Keywords: comm
 
@@ -40,9 +40,9 @@
 ;; ~: apply a keyword filter to the current conf listing
 ;; 6: toggle ipv6 support on/off (automatically called on start of ovpn)
 ;; x: execute an asynchronous shell command in the context of any associated namespace
-;; X: spawn an xterm in the context of any associated namespace
-;; C: spawn a google-chrome instance in the context of any associated namespace
-;; a: show all active vpn configurations accross all conf directories
+;; T: spawn a terminal in the context of any associated namespace
+;; B: spawn a browser in the context of any associated namespace
+;; a: show all active vpn configurations across all conf directories
 ;; h: describe mode
 ;;
 ;; ovpn-mode will maintain state for any running configurations, so you can
@@ -51,6 +51,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'netrc)  ; authinfo handling
+(require 'subr-x) ; string-join
 
 (defgroup ovpn nil
   "An OpenVPN management mode for Emacs."
@@ -65,6 +66,38 @@
 (defcustom ovpn-mode-base-directory "~/vpn/default"
   "Default base directory for .ovpn configurations."
   :type  'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-preferred-terminal "urxvt"
+  "Preferred terminal for namespace terminal spawn."
+  :type 'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-preferred-terminal-exec-flag "-e"
+  "The flag your preferred terminal takes to execute a command."
+  :type 'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-preferred-browser "google-chrome"
+  "Preferred browser for namespace browser spawn."
+  :type 'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-browser-data-dir "/dev/shm"
+  "Base data dir for ephemeral vpn browser session data."
+  :type 'string
+  :group 'ovpn)
+
+(defcustom ovpn-mode-browser-options
+  (string-join '("--no-referrers"
+                 "--disable-translate"
+                 "--disable-plugins"
+                 "--disable-plugins-discovery"
+                 "--disable-client-side-phishing-detection"
+                 "--incognito"
+                 "--user-data-dir=DATADIR") " ")
+  "Browser options: DATADIR (if present) will be replaced with a session specific variable path."
+  :type 'string
   :group 'ovpn)
 
 ;; used for keyword filtering of .ovpn listings
@@ -158,9 +191,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (define-key map "n" 'ovpn-mode-start-vpn-with-namespace)
     (when ovpn-mode-power-user
       (define-key map "x" 'ovpn-mode-async-shell-command-in-namespace))
-    (define-key map "X" 'ovpn-mode-spawn-xterm-in-namespace)
-    (define-key map "R" 'ovpn-mode-spawn-rtorrent-screen-in-namespace)
-    (define-key map "C" 'ovpn-mode-spawn-chrome-in-namespace)
+    (define-key map "T" 'ovpn-mode-spawn-term-in-namespace)
+    (define-key map "B" 'ovpn-mode-spawn-browser-in-namespace)
     (define-key map "a" 'ovpn-mode-active)
     (define-key map "6" (struct-ovpn-mode-platform-specific-ipv6-toggle
                          ovpn-mode-platform-specific))
@@ -193,7 +225,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 
     :echo          ,(executable-find "echo")
     :firewall-cmd  ,(executable-find "firewall-cmd")
-    :google-chrome ,(executable-find "google-chrome")
+    :browser       ,(executable-find ovpn-mode-preferred-browser)
     :ip            ,(executable-find "ip")
     :iptables      ,(executable-find "iptables")
     :kill          ,(executable-find "kill")
@@ -205,7 +237,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     :screen        ,(executable-find "screen")
     :sudo          ,(executable-find "sudo")
     :sysctl        ,(executable-find "sysctl")
-    :xterm         ,(executable-find "xterm")
+    :term          ,(executable-find ovpn-mode-preferred-terminal)
     ))
 
 (defmacro ovpn-mode-sudo (name buffer &rest args)
@@ -320,25 +352,17 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
             (,echo "-e" ,(format "\"nameserver %s\\nnameserver %s\\n\""
                                  ovpn-mode-netns-ns0
                                  ovpn-mode-netns-ns1)
-                   ">" ,(format "/etc/netns/%s/resolv.conf" netns))
-            ))
+                   ">" ,(format "/etc/netns/%s/resolv.conf" netns))))
 
          ;; enable masquerading
          (masquerade-cmds-iptables
-          `(
-            (,iptables "--table" "nat" "--append" "POSTROUTING" "--jump" "MASQUERADE" "--source" ,netns-range-default)
-            ))
+          `((,iptables "--table" "nat" "--append" "POSTROUTING" "--jump" "MASQUERADE" "--source" ,netns-range-default)))
          (masquerade-cmds-firewalld
-          `(
-            ;; add interface to default zone
+          `(;; add interface to default zone
             (,firewall-cmd "-q" ,(format "--add-interface=%s" veth-default))
-
             ;; enable masquerading on the default zone
             (,firewall-cmd "-q"  "--add-masquerade")
-            (,firewall-cmd "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default))
-
-            ))
-         )
+            (,firewall-cmd "-q" ,(format "--add-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" netns-range-default)))))
 
     ;; cycle through the setup commands synchronously as root
     (with-current-buffer netns-buffer
@@ -367,8 +391,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
              :netns-range-default ,netns-range-default
              :netns-range-vpn ,netns-range-vpn
              :netns-tunvpn ,netns-tunvpn
-             :base-id ,base-id)
-    ))
+             :base-id ,base-id)))
 
 (defun ovpn-mode-netns-linux-delete-default-route (netns)
   "Remove the default route for a given network namespace property list NETNS."
@@ -387,8 +410,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                namespace
                ip
                (car (split-string netns-range-default "/"))
-               veth-vpn)))
-    ))
+               veth-vpn)))))
 
 (defun ovpn-mode-netns-linux-delete (netns)
   "Delete a given network namespace based on property list NETNS."
@@ -406,46 +428,35 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
         (pgrep (plist-get ovpn-mode-bin-paths :pgrep)))
 
     ;; failure here is less critical
-
     (with-current-buffer netns-buffer
       (cd "/sudo::/tmp")
-
       ;; clear out the namespace and delete the links we created (these might error but you can safely ignore interface not found errors)
       (shell-command (format "%s netns delete %s" ip namespace))
       (shell-command (format "%s -rf /etc/netns/%s" rm (shell-quote-argument namespace)))
-
       ;; make these quiet because most likely they'll already be gone
       (shell-command-to-string (format "%s link delete %s" ip veth-default))
       (shell-command-to-string (format "%s link delete %s" ip veth-vpn))
-
       ;; as a rule we _only_ cleanup the things we _know_ we changed, we can make no assumptions about turning off masquerading completely
       ;; even if we gathered state at startup, emacs is routinely running for weeks if not months, so make no assumptions about the general
       ;; state of the system and the user preferences, only clean up things we _know_ we introduced into the environment
-
       (cond
-
        ;; firewalld
        ((not (equal (shell-command-to-string (format "%s firewalld" pgrep)) ""))
         (ovpn-mode-assert-shell-command
          (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
         (ovpn-mode-assert-shell-command
          (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
-
        ;; fall through to iptables
        (t
         (ovpn-mode-assert-shell-command
-         (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default))))
-
-      )
+         (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default)))))
 
     ;; just clear out buffers unless we explicitly want to keep them around
     (unless ovpn-mode-switch-to-buffer-on-stop
       (kill-buffer netns-buffer))
 
     ;; release the base-id for re-use
-    (push base-id ovpn-mode-netns-free-base)
-
-    ))
+    (push base-id ovpn-mode-netns-free-base)))
 
 ;; ipv6 support
 
@@ -496,6 +507,13 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (message "Could not disable ipv6 support")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; End of Linux specifics
+
+(defun ovpn-mode-conf-at-point ()
+  "Return configuration at point or nil."
+  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
+    (if (string-match-p ".*\\.ovpn" conf)
+        conf
+      nil)))
 
 ;;; this lets you juggle multiple dirs of confs and maintain state between them
 (defun ovpn-mode-dir-set (dir)
@@ -548,8 +566,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                  (ovpn-mode-highlight-conf line 'hi-green)))
               ;; if it's in the list but the process is dead, it's waiting for purging by q
               (ovpn-process
-               (ovpn-mode-highlight-conf line 'hi-red-b))
-              )))))
+               (ovpn-mode-highlight-conf line 'hi-red-b)))))))
 
 ;;; we use tramp's password prompt matcher
 (require 'tramp)
@@ -653,8 +670,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                     "%s -e \"nameserver %s\\n\" > /etc/netns/%s/resolv.conf"
                     (plist-get ovpn-mode-bin-paths :echo)
                     (shell-quote-argument dns)
-                    netns-name))))))
-         ))
+                    netns-name))))))))
 
       (when (buffer-live-p (process-buffer proc))
         (princ (format "%s" string) (process-buffer proc))))))
@@ -687,8 +703,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
       (message "Abnormal exit of openvpn, switching to buffer for debug")
       (princ (format "ovpn-process-sentinel: %s"
                      (replace-regexp-in-string "\n$" "" string)) (process-buffer proc))
-      (switch-to-buffer (process-buffer proc))))
-    ))
+      (switch-to-buffer (process-buffer proc))))))
 
 (defun ovpn-mode-purge-process-map ()
   "Clear the process hash table."
@@ -799,31 +814,34 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 
 This assumes any associated certificates live in the same directory as the conf."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-    (when (string-match-p ".*\\.ovpn" conf)
+  (let ((conf (ovpn-mode-conf-at-point)))
+    (when conf
       (ovpn-mode-start-vpn-conf conf with-namespace))))
 
 ;;; as root through kill since we don't know about priv-drops and can't use signal-process
 (defun ovpn-mode-signal-process (sig ovpn-process)
   "Send SIG to OVPN-PROCESS -> process (sudo) child directly."
-  (when ovpn-process
-    (progn
-      (let* ((process (struct-ovpn-process-process ovpn-process))
-             (buffer (struct-ovpn-process-buffer ovpn-process))
-             ;(buffer-name (struct-ovpn-process-buffer-name ovpn-process))
-             (kill (plist-get ovpn-mode-bin-paths :kill)))
-        (if (process-live-p process)
-            (ovpn-mode-sudo
-             "ovpn-mode-signal-process"
-             buffer
-             kill (format "-%d" sig) (format "%d" (process-id process)))
-          (message "Target openvpn process no longer alive"))))))
+
+  (unless ovpn-process
+    (error "Ovpn-process is nil!"))
+
+  (let ((process (struct-ovpn-process-process ovpn-process))
+        (buffer (struct-ovpn-process-buffer ovpn-process))
+        (kill (plist-get ovpn-mode-bin-paths :kill)))
+    (if (process-live-p process)
+        (ovpn-mode-sudo
+         "ovpn-mode-signal-process"
+         buffer
+         kill (format "-%d" sig) (format "%d" (process-id process)))
+      (message "Target openvpn process no longer alive"))))
 
 (defun ovpn-mode-stop-vpn-conf (conf)
   "Stop openvpn CONF through SIGTERM."
   (interactive "fFull path to ovpn conf: ")
   (let* ((ovpn-process (gethash conf ovpn-mode-process-map))
-         (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil)))
+         (netns (if ovpn-process
+                    (struct-ovpn-process-netns ovpn-process)
+                  nil)))
 
     (unless ovpn-process
       (error "No active openvpn process found for %s" conf))
@@ -844,14 +862,14 @@ This assumes any associated certificates live in the same directory as the conf.
 (defun ovpn-mode-stop-vpn ()
   "Stop openvpn conf at point through SIGTERM."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-    (ovpn-mode-stop-vpn-conf conf)))
+  (let ((conf (ovpn-mode-conf-at-point)))
+    (when conf
+      (ovpn-mode-stop-vpn-conf conf))))
 
 (defun ovpn-mode-restart-vpn ()
   "Restart openvpn conf through SIGHUP."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (ovpn-process (gethash conf ovpn-mode-process-map)))
+  (let ((ovpn-process (gethash (ovpn-mode-conf-at-point) ovpn-mode-process-map)))
     ;; relay SIGHUP through sudo
     (when ovpn-process
       (ovpn-mode-signal-process 1 ovpn-process))))
@@ -859,12 +877,11 @@ This assumes any associated certificates live in the same directory as the conf.
 (defun ovpn-mode-info-vpn ()
   "Dump info stats on selected ovpn conf."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (ovpn-process (gethash conf ovpn-mode-process-map)))
+  (let ((ovpn-process (gethash (ovpn-mode-conf-at-point) ovpn-mode-process-map)))
     (when ovpn-process
       (let ((link-remote (struct-ovpn-process-link-remote ovpn-process))
             (netns (struct-ovpn-process-netns ovpn-process))
-            (conf (file-name-nondirectory conf)))
+            (conf (file-name-nondirectory (ovpn-mode-conf-at-point))))
         (cond ((and link-remote netns)
                (message "%s: %s (namespace: %s)"
                         conf link-remote (plist-get netns :netns)))
@@ -876,80 +893,57 @@ This assumes any associated certificates live in the same directory as the conf.
 (defun ovpn-mode-buffer-vpn ()
   "Switch to the associated ovpn conf output buffer."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (ovpn-process (gethash conf ovpn-mode-process-map)))
+  (let ((ovpn-process (gethash (ovpn-mode-conf-at-point) ovpn-mode-process-map)))
     (when ovpn-process
       (switch-to-buffer (struct-ovpn-process-buffer ovpn-process)))))
 
-(defun ovpn-mode-spawn-xterm-in-namespace ()
-  "Execute an xterm inside of the selected namespace."
+(defun ovpn-mode-namespace-at-point ()
+  "Return active namespace at point or nil."
+  (let* ((ovpn-process (gethash (ovpn-mode-conf-at-point) ovpn-mode-process-map))
+         (netns (if ovpn-process
+                    (struct-ovpn-process-netns ovpn-process)
+                  (message "No namespace at point!")
+                  nil)))
+    netns))
+
+(defun ovpn-mode-spawn-term-in-namespace ()
+  "Execute a terminal inside namespace at point."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (proc-name (format "xterm-%s" (file-name-nondirectory conf)))
-         (cmd (format "%s -e \"%s -u %s PS1=\\\"%s> \\\" /bin/sh\""
-                      (plist-get ovpn-mode-bin-paths :xterm)
-                      (plist-get ovpn-mode-bin-paths :sudo)
-                      (user-real-login-name)
-                      (file-name-nondirectory conf))))
-    ;; we exec this as root because of the priv drop that occurs on the -e
-    (ovpn-mode-async-shell-command-in-namespace cmd "root" proc-name)))
-
-(defun ovpn-mode-spawn-rtorrent-screen-in-namespace (user dir torrent)
-  "Execute a headless screen rtorrent for TORRENT in DIR as USER.
-Use `screen -list' to find and attach your desired namespaced rtorrent instance."
-  (interactive "sSpawn rtorrent in screen as (default current user): \nfDownload directory: \nsTorrent URI (default no URI): ")
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (user (if (equal user "") (user-real-login-name) user))
-         (torrent (if (equal torrent "") nil torrent))
-         (proc-name (format "rtorrent-%s" (file-name-nondirectory conf)))
-         ;; run screen -dmS headless so we're not locked to emacs terminal support for the screen process
-         (cmd
-          (cond (torrent
-                 ;; start with a torrent
-                 (format "%s -fa -DmS %s %s -s %s -d %s \"%s\""
-                         (plist-get ovpn-mode-bin-paths :screen) proc-name
-                         (plist-get ovpn-mode-bin-paths :rtorrent)
-                         dir
-                         dir
-                         torrent))
-                (t
-                 ;; start without a torrent
-                 (format "%s -fa -DmS %s %s -s %s -d %s"
-                         (plist-get ovpn-mode-bin-paths :screen) proc-name
-                         (plist-get ovpn-mode-bin-paths :rtorrent)
-                         dir
-                         dir)))
-          ))
-    (ovpn-mode-async-shell-command-in-namespace cmd user proc-name)))
-
-(defvar ovpn-mode-chrome-data-dir-base "/dev/shm")
-
-(defun ovpn-mode-spawn-chrome-in-namespace ()
-  "Execute an incognito session of chrome with a namespace dedicated user-data-dir."
-  (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (ovpn-process (gethash conf ovpn-mode-process-map))
-         (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
-         (data-dir (if netns (shell-quote-argument (plist-get netns :netns)) nil))
-         (user (user-real-login-name))
-         (proc-name (format "chrome-%s-%s" user (file-name-nondirectory conf)))
-         ;; we have to go through an additional /bin/sh -c here because otherwise
-         ;; the && would bust us out of the namespace exec since that is executed
-         ;; through: "ip netns exec %s sudo -u %s %s"
-         (cmd (format "/bin/sh -c \"mkdir %s/%s; %s --no-referrers --disable-translate --disable-plugins --disable-plugins-discovery --disable-client-side-phishing-detection --incognito --user-data-dir=%s/%s && %s -rf %s/%s\""
-                      ovpn-mode-chrome-data-dir-base
-                      data-dir
-                      (plist-get ovpn-mode-bin-paths :google-chrome)
-                      ovpn-mode-chrome-data-dir-base
-                      data-dir
-                      (plist-get ovpn-mode-bin-paths :rm)
-                      ovpn-mode-chrome-data-dir-base
-                      data-dir)))
+  (let ((netns (ovpn-mode-namespace-at-point)))
     (when netns
-      (ovpn-mode-async-shell-command-in-namespace cmd user proc-name))))
+      (let ((proc-name (format "ovpn-term-%s" (plist-get netns :netns)))
+            (cmd (format "%s %s env PS1=%s /bin/sh"
+                         (plist-get ovpn-mode-bin-paths :term)
+                         ovpn-mode-preferred-terminal-exec-flag
+                         (shell-quote-argument
+                          (concat
+                           (file-name-nondirectory (ovpn-mode-conf-at-point))
+                           "> ")))))
+        (ovpn-mode-async-shell-command-in-namespace cmd (user-real-login-name) netns proc-name)))))
 
-(defun ovpn-mode-async-shell-command-in-namespace (cmd user &optional proc-name)
-  "Run CMD (optionally as PROC-NAME) as USER in the conf associated namespace.
+(defun ovpn-mode-spawn-browser-in-namespace ()
+  "Spawn a preferred browser inside namespace at point."
+  (interactive)
+  (let ((netns (ovpn-mode-namespace-at-point)))
+    (when netns
+      (let* ((session-dir (shell-quote-argument
+                           (string-join
+                            `(,ovpn-mode-browser-data-dir
+                              ,(plist-get netns :netns)) "/")))
+             (proc-name (format "ovpn-browser-%s" (plist-get netns :netns)))
+             ;; we have to go through an additional /bin/sh -c here because otherwise
+             ;; the && would bust us out of the namespace exec since that is executed
+             ;; through: "ip netns exec %s sudo -u %s %s"
+             (cmd (format "/bin/sh -c \"mkdir -p %s; %s %s && %s -rf %s\""
+                          session-dir
+                          (plist-get ovpn-mode-bin-paths :browser)
+                          (replace-regexp-in-string "DATADIR" session-dir ovpn-mode-browser-options t)
+                          (plist-get ovpn-mode-bin-paths :rm)
+                          session-dir)))
+        (ovpn-mode-async-shell-command-in-namespace cmd (user-real-login-name) netns proc-name)))))
+
+(defun ovpn-mode-async-shell-command-in-namespace (cmd user netns &optional proc-name)
+  "Run CMD (optionally as PROC-NAME) as USER in the conf associated namespace NETNS.
 
 Please be very careful how you use this, as this is passed to the shell directly
 and with root privileges.
@@ -973,13 +967,11 @@ Which would expand into:
 
 sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethingelse\""
   (interactive "sCmd: \nsUser (default current user): \n")
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line)))
-         (ovpn-process (gethash conf ovpn-mode-process-map))
-         (netns (if ovpn-process (struct-ovpn-process-netns ovpn-process) nil))
-         (user (if (equal user "") (user-real-login-name) user)))
 
-    (unless netns
-      (error "%s" "No associated namespace at point"))
+  (unless netns
+    (error "%s" "Namespace is nil!"))
+
+  (let ((user (if (equal user "") (user-real-login-name) user)))
 
     (message "Attempting to execute \"%s\" in namespace %s as user %s"
              cmd
@@ -1002,8 +994,8 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
 (defun ovpn-mode-edit-vpn ()
   "Open the selected ovpn conf for editing."
   (interactive)
-  (let* ((conf (replace-regexp-in-string "\n$" "" (thing-at-point 'line))))
-    (when (string-match-p ".*\\.ovpn" conf)
+  (let* ((conf (ovpn-mode-conf-at-point)))
+    (when conf
       (find-file conf))))
 
 (defun ovpn-mode-active ()
@@ -1039,7 +1031,6 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
      "s start, n start with namespace, r restart, q stop/purge\n\n")
 
     (cond
-
      ;; dump any active configurations, regardless of directory base
      (show-active
       (ovpn-mode-insert-line "Active openvpn configurations:\n")
