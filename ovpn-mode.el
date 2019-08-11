@@ -852,14 +852,15 @@ This assumes any associated certificates live in the same directory as the conf.
 
     ;; allow reset of error states highlight
     (when ovpn-mode-buffer
-      (ovpn-mode-unhighlight-conf conf))
-    ;; clear the status line from the mode buffer
-    (ovpn-mode-link-status nil t)
+      (ovpn-mode-unhighlight-conf conf)
+      ;; clear the status line from the mode buffer
+      (ovpn-mode-link-status nil t))
 
     (unless ovpn-process
       (error "No active openvpn process found for %s" conf))
 
     (ovpn-mode-signal-process 15 ovpn-process)
+
     ;; clear out any associated namespace if needed
     (when netns
       (funcall (struct-ovpn-mode-platform-specific-netns-delete
