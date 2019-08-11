@@ -891,10 +891,10 @@ On 'no' state is retained and re-usable in subsequent ovpn-mode buffers."
                  (yes-or-no-p "Tear down all active vpn sessions? ")))
     (maphash #'(lambda (key _value)
                  ;; our hash map contains process objects and conf name strings
-                 (when (stringp key) (ovpn-mode-stop-vpn-conf key))) ovpn-mode-process-map))
-  ;; spin until everything is tore down
-  (while (ovpn-mode-check-active)
-    (message "Waiting for ovpn processes to clean up!"))
+                 (when (stringp key) (ovpn-mode-stop-vpn-conf key))) ovpn-mode-process-map)
+    ;; spin until everything is tore down
+    (while (ovpn-mode-check-active)
+      (message "Waiting for ovpn processes to clean up!")))
   ;; return t so kill-emacs proceeds with final kill when used as exit cleanup hook
   t)
 
