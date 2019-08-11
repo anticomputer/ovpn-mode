@@ -183,6 +183,7 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
     (define-key map "s" 'ovpn-mode-start-vpn)
     (define-key map "r" 'ovpn-mode-restart-vpn)
     (define-key map "q" 'ovpn-mode-stop-vpn)
+    (define-key map "Q" 'ovpn-mode-stop-all)
     (define-key map "i" 'ovpn-mode-info-vpn)
     (define-key map "b" 'ovpn-mode-buffer-vpn)
     (define-key map "e" 'ovpn-mode-edit-vpn)
@@ -213,8 +214,9 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (defvar ovpn-mode-buffer-name "*ovpn-mode*")
 (defvar ovpn-mode-buffer nil)
 
-;; control buffer switch or kill behavior on stop
+;; control buffer switch or kill behavior on stop ... these are mutex
 (defvar ovpn-mode-switch-to-buffer-on-stop nil)
+(defvar ovpn-mode-kill-buffer-on-stop t)
 
 ;; resolve full paths to binaries we use ... prevent CWD abuse
 (defvar ovpn-mode-bin-paths
@@ -451,9 +453,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
         (ovpn-mode-assert-shell-command
          (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default)))))
 
-    ;; just clear out buffers unless we explicitly want to keep them around
-    (unless ovpn-mode-switch-to-buffer-on-stop
-      (kill-buffer netns-buffer))
+    ;; just clear out buffers unless debugging this stuff
+    (kill-buffer netns-buffer)
 
     ;; release the base-id for re-use
     (push base-id ovpn-mode-netns-free-base)))
@@ -695,8 +696,11 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
      ;; switch on normal finish
      ((string-match-p "^finished" string)
       ;; swap to the associated buffer for convenient killing if desired
-      (when ovpn-mode-switch-to-buffer-on-stop
-        (switch-to-buffer (process-buffer proc))))
+      (if ovpn-mode-switch-to-buffer-on-stop
+          (switch-to-buffer (process-buffer proc))
+        ;; switch is mutex to kill
+        (when ovpn-mode-kill-buffer-on-stop
+          (kill-buffer (process-buffer proc)))))
 
      ;; something funky happened ... check it out
      ((buffer-live-p (process-buffer proc))
@@ -789,6 +793,9 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
         (set-process-filter process 'ovpn-process-filter)
         (set-process-sentinel process 'ovpn-process-sentinel)
 
+        ;; we clean up our own processes in our exit hooks
+        (set-process-query-on-exit-flag process nil)
+
         ;; throw the process struct into the lookup maps
         (let ((ovpn-process (make-struct-ovpn-process
                              :buffer buffer
@@ -843,21 +850,29 @@ This assumes any associated certificates live in the same directory as the conf.
                     (struct-ovpn-process-netns ovpn-process)
                   nil)))
 
+    ;; allow reset of error states highlight
+    (when ovpn-mode-buffer
+      (ovpn-mode-unhighlight-conf conf))
+    ;; clear the status line from the mode buffer
+    (ovpn-mode-link-status nil t)
+
     (unless ovpn-process
       (error "No active openvpn process found for %s" conf))
 
     (ovpn-mode-signal-process 15 ovpn-process)
-    (when ovpn-mode-buffer
-      (ovpn-mode-unhighlight-conf conf))
-    ;; pull the hash table entry for this instance
-    (remhash conf ovpn-mode-process-map)
-    (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)
-    ;; clear the status line from the mode buffer
-    (ovpn-mode-link-status nil t)
     ;; clear out any associated namespace if needed
     (when netns
       (funcall (struct-ovpn-mode-platform-specific-netns-delete
-                ovpn-mode-platform-specific) netns))))
+                ovpn-mode-platform-specific) netns))
+    ;; always do this last since we use the size of this map as a spinlock
+    (remhash conf ovpn-mode-process-map)
+    (remhash (struct-ovpn-process-process ovpn-process) ovpn-mode-process-map)))
+
+(defun ovpn-mode-check-active ()
+  "Returns t while any active vpn sessions exists."
+  (if (equal 0 (hash-table-count ovpn-mode-process-map))
+      nil
+    t))
 
 (defun ovpn-mode-stop-vpn ()
   "Stop openvpn conf at point through SIGTERM."
@@ -865,6 +880,21 @@ This assumes any associated certificates live in the same directory as the conf.
   (let ((conf (ovpn-mode-conf-at-point)))
     (when conf
       (ovpn-mode-stop-vpn-conf conf))))
+
+(defun ovpn-mode-stop-all (&optional no-prompt)
+  "Stop all active openvpn conf.
+
+On 'no' state is retained and re-usable in subsequent ovpn-mode buffers."
+  (interactive)
+  (when (or no-prompt (yes-or-no-p "Tear down all active vpn sessions? "))
+    (maphash #'(lambda (key _value)
+                 ;; our hash map contains process objects and conf name strings
+                 (when (stringp key) (ovpn-mode-stop-vpn-conf key))) ovpn-mode-process-map))
+  ;; spin until everything is tore down
+  (while (ovpn-mode-check-active)
+    (message "Waiting for ovpn processes to clean up!"))
+  ;; return t so kill-emacs proceeds with final kill when used as exit cleanup hook
+  t)
 
 (defun ovpn-mode-restart-vpn ()
   "Restart openvpn conf through SIGHUP."
@@ -1013,8 +1043,15 @@ sh -c ip netns exec namespacename sudo -u user /bin/sh -c \"something && somethi
            ;; initialize to read only, lift inhibit-read-only to t where needed
            (setq buffer-read-only t)
            ;; set a local kill-buffer-hook to reset our configurations and buffer
-           (add-hook 'kill-buffer-hook '(lambda () (setq ovpn-mode-configurations nil
-                                                    ovpn-mode-buffer nil)) nil t))
+           (add-hook 'kill-buffer-hook
+                     '(lambda ()
+                        (ovpn-mode-stop-all)
+                        (setq ovpn-mode-configurations nil ovpn-mode-buffer nil))
+                     nil t))
+         ;; emacs does not duplicate hook entries so this is fine
+         (add-hook 'kill-emacs-query-functions
+                   '(lambda ()
+                      (ovpn-mode-stop-all t)))
          (switch-to-buffer ovpn-mode-buffer)
          (ovpn-mode))
         (t

@@ -11,6 +11,7 @@ An openvpn management mode for Emacs24+ that lets you start|stop|restart openvpn
 - `s`: start the selected ovpn
 - `n`: start the selected ovpn in a dedicated namespace
 - `q`: stop the selected ovpn
+- `Q`: stop all active ovpn
 - `r`: restart the selected ovpn
 
 There's a simple color coding scheme that tells you which state a given ovpn is in:
@@ -38,6 +39,10 @@ For power users there is a customize option `ovpn-mode-power-user` that will als
 - `x`: execute an asynchronous shell command in the context of any associated namespace
 
 Please note that this functionality is not intended for direct use as it handles privileged shell commands, see the function documentation for `ovpn-mode-async-shell-command-in-namespace` for further detail. You can safely ignore this and just use the provided terminal spawner to get safe command execution in a namespace context.
+
+Mode buffer and emacs exit:
+
+On `ovpn-mode' buffer kill you will be presented with the option to tear down all active vpn sessions. If you opt out, then your session state will be retained and available for your next `ovpn-mode' session as long as emacs remains running. On emacs exit, all active vpn sessions are explicitly torn down.
 
 Managing multiple directory states:
 
