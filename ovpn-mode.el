@@ -886,7 +886,9 @@ This assumes any associated certificates live in the same directory as the conf.
 
 On 'no' state is retained and re-usable in subsequent ovpn-mode buffers."
   (interactive)
-  (when (or no-prompt (yes-or-no-p "Tear down all active vpn sessions? "))
+  (when (or no-prompt
+            (and (ovpn-mode-check-active)
+                 (yes-or-no-p "Tear down all active vpn sessions? ")))
     (maphash #'(lambda (key _value)
                  ;; our hash map contains process objects and conf name strings
                  (when (stringp key) (ovpn-mode-stop-vpn-conf key))) ovpn-mode-process-map))
