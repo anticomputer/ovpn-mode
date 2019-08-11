@@ -42,7 +42,7 @@ Please note that this functionality is not intended for direct use as it handles
 
 Mode buffer and emacs exit:
 
-On `ovpn-mode' buffer kill you will be presented with the option to tear down all active vpn sessions. If you opt out, then your session state will be retained and available for your next `ovpn-mode' session as long as emacs remains running. On emacs exit, all active vpn sessions are explicitly torn down.
+On ovpn-mode buffer kill you will be presented with the option to tear down all active vpn sessions. If you opt out, then your session state will be retained and available for your next ovpn-mode session as long as emacs remains running. On emacs exit, all active vpn sessions are explicitly torn down.
 
 Managing multiple directory states:
 
