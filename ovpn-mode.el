@@ -838,7 +838,10 @@ This assumes any associated certificates live in the same directory as the conf.
     (if (process-live-p process)
         (ovpn-mode-sudo
          "ovpn-mode-signal-process"
-         buffer
+         ;; fall back to scratch buffer if needed
+         (if (buffer-live-p buffer)
+             buffer
+           (get-buffer-create "*scratch*"))
          kill (format "-%d" sig) (format "%d" (process-id process)))
       (message "Target openvpn process no longer alive"))))
 
