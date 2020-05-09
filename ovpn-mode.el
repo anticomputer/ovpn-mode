@@ -245,8 +245,8 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 (defmacro ovpn-mode-sudo (name buffer &rest args)
   "Sudo exec a command ARGS as NAME and output to BUFFER."
   `(with-current-buffer ,buffer
-     (cd "/sudo::/tmp")
-     (let ((process (start-file-process ,name ,buffer ,@args)))
+     (let* ((default-directory "/sudo::/tmp")
+            (process (start-file-process ,name ,buffer ,@args)))
        (when (process-live-p process)
          (set-process-filter process
                              #'(lambda (_proc string)
@@ -368,22 +368,22 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 
     ;; cycle through the setup commands synchronously as root
     (with-current-buffer netns-buffer
-      (cd "/sudo::/tmp")
       ;; init namespace
-      (dolist (cmd (append setup-cmds
-                           ;; check if we're on a firewalld enabled system per chance
-                           (if (equal (shell-command-to-string (format "%s firewalld" pgrep)) "")
-                               masquerade-cmds-iptables
-                             (progn
-                               (message "Firewalld is running on this system, diverting masquerade setup")
-                               masquerade-cmds-firewalld))))
-        (let ((cmd (mapconcat #'(lambda (x) (format "%s" x)) cmd " ")))
-          (message "ovpn-mode sudo executing: %s" cmd)
+      (let ((default-directory "/sudo::/tmp"))
+        (dolist (cmd (append setup-cmds
+                             ;; check if we're on a firewalld enabled system per chance
+                             (if (equal (shell-command-to-string (format "%s firewalld" pgrep)) "")
+                                 masquerade-cmds-iptables
+                               (progn
+                                 (message "Firewalld is running on this system, diverting masquerade setup")
+                                 masquerade-cmds-firewalld))))
+          (let ((cmd (mapconcat #'(lambda (x) (format "%s" x)) cmd " ")))
+            (message "ovpn-mode sudo executing: %s" cmd)
 
-          ;; pull the chute hard on failure here
-          (ovpn-mode-assert-shell-command cmd)
+            ;; pull the chute hard on failure here
+            (ovpn-mode-assert-shell-command cmd)
 
-          )))
+            ))))
 
     ;; return the relevant property list for this namespace
     `(:netns ,netns
@@ -404,15 +404,15 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
          (ip (plist-get ovpn-mode-bin-paths :ip)))
 
     (with-current-buffer netns-buffer
-      (cd "/sudo::/tmp")
       ;; wait for the link to actually be up
-      (ovpn-mode-assert-shell-command
-       (format "%s netns exec %s %s route delete default via \"%s\" dev %s"
-               ip
-               namespace
-               ip
-               (car (split-string netns-range-default "/"))
-               veth-vpn)))))
+      (let ((default-directory "/sudo::/tmp"))
+        (ovpn-mode-assert-shell-command
+         (format "%s netns exec %s %s route delete default via \"%s\" dev %s"
+                 ip
+                 namespace
+                 ip
+                 (car (split-string netns-range-default "/"))
+                 veth-vpn))))))
 
 (defun ovpn-mode-netns-linux-delete (netns)
   "Delete a given network namespace based on property list NETNS."
@@ -431,27 +431,27 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
 
     ;; failure here is less critical
     (with-current-buffer netns-buffer
-      (cd "/sudo::/tmp")
-      ;; clear out the namespace and delete the links we created (these might error but you can safely ignore interface not found errors)
-      (shell-command (format "%s netns delete %s" ip namespace))
-      (shell-command (format "%s -rf /etc/netns/%s" rm (shell-quote-argument namespace)))
-      ;; make these quiet because most likely they'll already be gone
-      (shell-command-to-string (format "%s link delete %s" ip veth-default))
-      (shell-command-to-string (format "%s link delete %s" ip veth-vpn))
-      ;; as a rule we _only_ cleanup the things we _know_ we changed, we can make no assumptions about turning off masquerading completely
-      ;; even if we gathered state at startup, emacs is routinely running for weeks if not months, so make no assumptions about the general
-      ;; state of the system and the user preferences, only clean up things we _know_ we introduced into the environment
-      (cond
-       ;; firewalld
-       ((not (equal (shell-command-to-string (format "%s firewalld" pgrep)) ""))
-        (ovpn-mode-assert-shell-command
-         (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
-        (ovpn-mode-assert-shell-command
-         (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
-       ;; fall through to iptables
-       (t
-        (ovpn-mode-assert-shell-command
-         (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default)))))
+      (let ((default-directory "/sudo::/tmp"))
+        ;; clear out the namespace and delete the links we created (these might error but you can safely ignore interface not found errors)
+        (shell-command (format "%s netns delete %s" ip namespace))
+        (shell-command (format "%s -rf /etc/netns/%s" rm (shell-quote-argument namespace)))
+        ;; make these quiet because most likely they'll already be gone
+        (shell-command-to-string (format "%s link delete %s" ip veth-default))
+        (shell-command-to-string (format "%s link delete %s" ip veth-vpn))
+        ;; as a rule we _only_ cleanup the things we _know_ we changed, we can make no assumptions about turning off masquerading completely
+        ;; even if we gathered state at startup, emacs is routinely running for weeks if not months, so make no assumptions about the general
+        ;; state of the system and the user preferences, only clean up things we _know_ we introduced into the environment
+        (cond
+         ;; firewalld
+         ((not (equal (shell-command-to-string (format "%s firewalld" pgrep)) ""))
+          (ovpn-mode-assert-shell-command
+           (format "%s -q --remove-rich-rule=\'rule family=\"ipv4\" source address=\"%s\" masquerade\'" firewall-cmd netns-range-default))
+          (ovpn-mode-assert-shell-command
+           (format "%s -q --remove-interface=%s" firewall-cmd veth-default)))
+         ;; fall through to iptables
+         (t
+          (ovpn-mode-assert-shell-command
+           (format "%s -D POSTROUTING --table nat --jump MASQUERADE --source %s" iptables netns-range-default))))))
 
     ;; just clear out buffers unless debugging this stuff
     (kill-buffer netns-buffer)
@@ -665,13 +665,13 @@ Example authinfo entry: machine CONFIG.OVPN login USER password PASS"
                 (message "Setting DNS option for %s to nameserver %s"
                          (file-name-nondirectory conf) dns)
                 (with-current-buffer netns-buffer
-                  (cd "/sudo::/tmp")
-                  (shell-command
-                   (format
-                    "%s -e \"nameserver %s\\n\" > /etc/netns/%s/resolv.conf"
-                    (plist-get ovpn-mode-bin-paths :echo)
-                    (shell-quote-argument dns)
-                    netns-name))))))))
+                  (let ((default-directory "/sudo::/tmp"))
+                    (shell-command
+                     (format
+                      "%s -e \"nameserver %s\\n\" > /etc/netns/%s/resolv.conf"
+                      (plist-get ovpn-mode-bin-paths :echo)
+                      (shell-quote-argument dns)
+                      netns-name)))))))))
 
       (when (buffer-live-p (process-buffer proc))
         (princ (format "%s" string) (process-buffer proc))))))
